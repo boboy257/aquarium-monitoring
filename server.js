@@ -141,17 +141,55 @@ app.get('/api/export', async (req, res) => {
   const { start, end } = req.query;
   let filter = {};
 
+  // --- MODIFIKASI DIMULAI ---
   if (start && end) {
+    let startDateObj = new Date(start);
+    let endDateObj = new Date(end);
+
+    // Cek apakah parsing berhasil
+    if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+      console.error('Invalid date format received for export:', start, end);
+      return res.status(400).json({ message: 'Invalid date format' });
+    }
+
+    // Fungsi bantuan untuk konversi WITA ke UTC (dalam objek Date)
+    function witaToUtcDate(witaString) {
+      // witaString format: 'YYYY-MM-DDTHH:mm' (local browser time, dianggap WITA)
+      const localDate = new Date(witaString);
+      if (isNaN(localDate.getTime())) {
+        throw new Error('Invalid date string');
+      }
+      // Ambil offset WITA dalam menit (8 jam = 8 * 60 menit)
+      const witaOffsetMinutes = 8 * 60;
+      const localTimeMs = localDate.getTime();
+      const utcTimeMsForWita = localTimeMs - (witaOffsetMinutes * 60000); // 60000 ms per minute
+      return new Date(utcTimeMsForWita);
+    }
+
+    try {
+        startDateObj = witaToUtcDate(start);
+        endDateObj = witaToUtcDate(end);
+    } catch (e) {
+        console.error('Error parsing date for export (WITA assumed):', e.message);
+        return res.status(400).json({ message: 'Invalid date format, must be compatible with WITA (YYYY-MM-DDTHH:mm)' });
+    }
+
     filter.timestamp = {
-      $gte: new Date(start),
-      $lte: new Date(end)
+      $gte: startDateObj,
+      $lte: endDateObj
     };
   }
+  // --- MODIFIKASI BERAKHIR ---
+
+  console.log('Export filter:', filter); // Log filter untuk debugging
 
   const data = await Data.find(filter).sort({ timestamp: 1 });
 
+  console.log('Data found for export:', data.length); // Log jumlah data
+
   if (data.length === 0) {
-    return res.status(404).json({ message: 'No data found' });
+    console.log('No data found in DB for export with filter:', filter); // Log tambahan
+    return res.status(404).json({ message: 'No data found for the selected date range' });
   }
 
   // Header CSV diperbarui: Gunakan field baru
