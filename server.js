@@ -26,7 +26,8 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // MongoDB connection
-mongoose.connect('mongodb://localhost:27017/aquarium', {
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/aquarium';
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 });
