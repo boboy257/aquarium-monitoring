@@ -12,7 +12,20 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // Serve static files dari folder frontend
-const frontendPath = path.join(__dirname, '../frontend');
+// Coba beberapa kemungkinan path untuk menemukan folder frontend
+let frontendPath;
+
+// Cek apakah berjalan di Render (dengan melihat environment variable RENDER atau path root)
+// Render menempatkan kode di /opt/render/project/src/
+if (__dirname.startsWith('/opt/render/project/src')) {
+  // Jika di Render, asumsikan root project adalah tempat server.js dijalankan
+  frontendPath = path.join(__dirname, 'frontend'); // -> /opt/render/project/src/frontend
+} else {
+  // Jika lokal, gunakan path relatif seperti sebelumnya
+  frontendPath = path.join(__dirname, '../frontend'); // -> ../frontend relatif ke backend/
+}
+
+console.log('Serving static files from:', frontendPath); // Log untuk debugging
 app.use(express.static(frontendPath));
 
 // CORS untuk frontend
