@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aquarium Control Dashboard</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* Menerapkan font Inter sebagai default */
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-100">
+
+  <nav class="bg-white shadow-sm">
+    <div class="container mx-auto max-w-7xl px-4">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="waves" class="w-8 h-8 text-blue-600"></i>
+          <span class="text-xl font-bold text-gray-800">Aquarium Control</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mx-auto max-w-7xl px-4 py-8">
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
+        <div class="flex-shrink-0 bg-blue-100 rounded-full p-3">
+          <i data-lucide="thermometer" class="w-7 h-7 text-blue-600"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg text-gray-600">Suhu Terkini</h3>
+          <p id="suhu-value" class="text-3xl font-bold text-blue-600">-</p>
+        </div>
+      </div>
+      <!-- CARD TURBIDITY -->
+      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
+        <div class="flex-shrink-0 bg-amber-100 rounded-full p-3">
+          <i data-lucide="droplets" class="w-7 h-7 text-amber-600"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg text-gray-600">Kekeruhan Air</h3>
+          <p id="turbidity-value" class="text-3xl font-bold text-amber-600">-</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
+        <div class="flex-shrink-0 bg-green-100 rounded-full p-3">
+          <i data-lucide="sliders-horizontal" class="w-7 h-7 text-green-600"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg text-gray-600">Kontrol Aktif</h3>
+          <p id="kontrol-value" class="text-2xl font-bold text-green-600">-</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
+        <div class="flex-shrink-0 bg-red-100 rounded-full p-3">
+          <i data-lucide="gauge" class="w-7 h-7 text-red-600"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg text-gray-600">PWM Heater</h3>
+          <p id="pwm-value" class="text-3xl font-bold text-red-600">-</p>
+        </div>
+      </div>
+      <!-- CARD PWM POMPA -->
+      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
+        <div class="flex-shrink-0 bg-purple-100 rounded-full p-3">
+          <i data-lucide="tornado" class="w-7 h-7 text-purple-600"></i>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg text-gray-600">PWM Pompa</h3>
+          <p id="pwm-pompa-value" class="text-3xl font-bold text-purple-600">-</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <div class="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
+        <h2 class="text-xl font-semibold mb-4 text-gray-800">Grafik Real-Time</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Grafik Suhu -->
+          <div class="h-80">
+            <canvas id="chartSuhu"></canvas>
+          </div>
+          <!-- Grafik Kekeruhan -->
+          <div class="h-80">
+            <canvas id="chartKekeruhan"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-1 flex flex-col gap-6">
+
+        <div class="bg-white rounded-xl shadow-lg p-6">
+          <h2 class="text-xl font-semibold mb-5 text-gray-800">Setting Kontrol</h2>
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-1 text-gray-600">Mode Kontrol</label>
+              <select id="mode"
+                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                <option value="Fuzzy">Fuzzy</option>
+                <option value="PID">PID</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1 text-gray-600">Setpoint Suhu (°C)</label>
+              <input type="number" step="0.1" id="setpoint" value="28.0"
+                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-sm font-medium mb-1 text-gray-600">Kp Suhu</label>
+                <input type="number" step="0.1" id="kp" value="25"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1 text-gray-600">Ki Suhu</label>
+                <input type="number" step="0.1" id="ki" value="1.5"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1 text-gray-600">Kd Suhu</label>
+                <input type="number" step="0.1" id="kd" value="4"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-sm font-medium mb-1 text-gray-600">Kp Keruh</label>
+                <input type="number" step="0.1" id="kp_keruh" value="10"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1 text-gray-600">Ki Keruh</label>
+                <input type="number" step="0.1" id="ki_keruh" value="0.5"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-1 text-gray-600">Kd Keruh</label>
+                <input type="number" step="0.1" id="kd_keruh" value="1"
+                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1 text-gray-600">Setpoint Kekeruhan (%)</label>
+              <input type="number" step="0.1" id="keruh_setpoint" value="10.0"
+                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+            </div>
+
+            <div class="mt-2">
+              <button onclick="saveControl()"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200">
+                <i data-lucide="save" class="w-5 h-5"></i>
+                <span>Simpan & Kirim ke ESP32</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-6">
+          <h2 class="text-xl font-semibold mb-5 text-gray-800">Export CSV</h2>
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-1 text-gray-600">Tanggal Awal</label>
+              <input type="datetime-local" id="start-date"
+                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1 text-gray-600">Tanggal Akhir</label>
+              <input type="datetime-local" id="end-date"
+                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+            </div>
+            <div class="mt-2">
+              <button onclick="exportCSV()"
+                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200">
+                <i data-lucide="download" class="w-5 h-5"></i>
+                <span>Export CSV</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>
