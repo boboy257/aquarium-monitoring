@@ -1,10 +1,9 @@
-// models/ResearchData.js
 const mongoose = require('mongoose');
 
 const researchDataSchema = new mongoose.Schema({
   // Timing
   timestamp: { type: Date, default: Date.now, index: true },
-  timestamp_ms: { type: Number }, // Milliseconds from ESP32
+  timestamp_ms: { type: Number },
   
   // Sensor Readings
   suhu: { type: Number, required: true },
@@ -23,9 +22,9 @@ const researchDataSchema = new mongoose.Schema({
   error_suhu: { type: Number },
   error_keruh: { type: Number },
   
-  // PID Internals (only for PID mode)
+  // PID Internals
   pid_integral_suhu: { type: Number },
-  pid_integral_keruh: { type:Number },
+  pid_integral_keruh: { type: Number },
   
   // Experiment Info
   experiment_running: { type: Boolean, default: false },
@@ -36,8 +35,8 @@ const researchDataSchema = new mongoose.Schema({
   collection: 'research_data'
 });
 
-// Index for fast querying
+// Indexes
 researchDataSchema.index({ experiment_id: 1, timestamp: 1 });
-researchDataSchema.index({ kontrol_aktif: 1, experiment_running: 1 });
+researchDataSchema.index({ kontrol_aktif: 1, timestamp: -1 });
 
 module.exports = mongoose.model('ResearchData', researchDataSchema);
