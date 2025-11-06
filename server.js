@@ -1,157 +1,18 @@
 // =========================================================================
-//                   models/ResearchData.js
-// =========================================================================
-const mongoose = require('mongoose');
-
-const researchDataSchema = new mongoose.Schema({
-  // Timing
-  timestamp: { type: Date, default: Date.now, index: true },
-  timestamp_ms: { type: Number }, // Milliseconds from ESP32
-  
-  // Sensor Readings
-  suhu: { type: Number, required: true },
-  turbidity_persen: { type: Number, required: true },
-  
-  // Control Info
-  kontrol_aktif: { type: String, enum: ['Fuzzy', 'PID'], required: true },
-  pwm_heater: { type: Number },
-  pwm_pompa: { type: Number },
-  
-  // Setpoints
-  setpoint_suhu: { type: Number },
-  setpoint_keruh: { type: Number },
-  
-  // Errors
-  error_suhu: { type: Number },
-  error_keruh: { type: Number },
-  
-  // PID Internals (only for PID mode)
-  pid_integral_suhu: { type: Number },
-  pid_integral_keruh: { type: Number },
-  
-  // Experiment Info
-  experiment_running: { type: Boolean, default: false },
-  experiment_id: { type: String, index: true },
-  experiment_elapsed_s: { type: Number }
-}, {
-  timestamps: true,
-  collection: 'research_data'
-});
-
-// Index for fast querying
-researchDataSchema.index({ experiment_id: 1, timestamp: 1 });
-researchDataSchema.index({ kontrol_aktif: 1, experiment_running: 1 });
-
-module.exports = mongoose.model('ResearchData', researchDataSchema);
-
-// =========================================================================
-//                   models/PerformanceMetrics.js
-// =========================================================================
-const metricsSchema = new mongoose.Schema({
-  // Experiment Info
-  experiment_id: { type: String, required: true, index: true },
-  kontrol_aktif: { type: String, enum: ['Fuzzy', 'PID'], required: true },
-  elapsed_s: { type: Number },
-  timestamp: { type: Date, default: Date.now },
-  
-  // Temperature Metrics
-  temperature: {
-    overshoot_percent: { type: Number },
-    settling_time_s: { type: Number },
-    steady_state_error: { type: Number },
-    peak_value: { type: Number },
-    peak_time_s: { type: Number },
-    settled: { type: Boolean, default: false }
-  },
-  
-  // Turbidity Metrics
-  turbidity: {
-    overshoot_percent: { type: Number },
-    settling_time_s: { type: Number },
-    steady_state_error: { type: Number },
-    peak_value: { type: Number },
-    peak_time_s: { type: Number },
-    settled: { type: Boolean, default: false }
-  }
-}, {
-  timestamps: true,
-  collection: 'performance_metrics'
-});
-
-metricsSchema.index({ experiment_id: 1, timestamp: -1 });
-
-const PerformanceMetrics = mongoose.model('PerformanceMetrics', metricsSchema);
-
-// =========================================================================
-//                   models/Experiment.js
-// =========================================================================
-const experimentSchema = new mongoose.Schema({
-  experiment_id: { type: String, required: true, unique: true },
-  control_mode: { type: String, enum: ['Fuzzy', 'PID'], required: true },
-  
-  // Configuration
-  config: {
-    suhu_setpoint: { type: Number, required: true },
-    keruh_setpoint: { type: Number, required: true },
-    duration_ms: { type: Number },
-    
-    // PID Parameters (if PID mode)
-    kp_suhu: Number,
-    ki_suhu: Number,
-    kd_suhu: Number,
-    kp_keruh: Number,
-    ki_keruh: Number,
-    kd_keruh: Number
-  },
-  
-  // Status
-  status: { 
-    type: String, 
-    enum: ['pending', 'running', 'completed', 'stopped'], 
-    default: 'pending' 
-  },
-  started_at: { type: Date },
-  completed_at: { type: Date },
-  
-  // Final Results (calculated after completion)
-  results: {
-    temperature: {
-      overshoot_percent: Number,
-      settling_time_s: Number,
-      steady_state_error: Number,
-      rise_time_s: Number,
-      peak_time_s: Number
-    },
-    turbidity: {
-      overshoot_percent: Number,
-      settling_time_s: Number,
-      steady_state_error: Number,
-      rise_time_s: Number,
-      peak_time_s: Number
-    },
-    data_points_count: { type: Number, default: 0 }
-  }
-}, {
-  timestamps: true,
-  collection: 'experiments'
-});
-
-const Experiment = mongoose.model('Experiment', experimentSchema);
-
-// =========================================================================
-//                   Enhanced server.js with Research Features
+//            server.js
 // =========================================================================
 const express = require('express');
-//const mongoose = require('mongoose');
+const mongoose = require('mongoose'); // <-- DI-UNCOMMENT
 const mqtt = require('mqtt');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 
+// Import dari folder /models
 const ResearchData = require('./models/ResearchData');
-//const PerformanceMetrics = require('./models/PerformanceMetrics');
-//const Experiment = require('./models/Experiment');
-const Control = require('./models/Control');
+const PerformanceMetrics = require('./models/PerformanceMetrics'); // <-- DI-UNCOMMENT
+const Experiment = require('./models/Experiment'); // <-- DI-UNCOMMENT
+const Control = require('./models/Control'); // File ini akan kita buat di bawah
 
 const CONFIG = {
   PORT: process.env.PORT || 3000,
@@ -184,7 +45,7 @@ const frontendPath = __dirname.startsWith('/opt/render/project/src') ?
 app.use(express.static(frontendPath));
 
 // =========================================================================
-//                   DATABASE CONNECTION
+//            DATABASE CONNECTION
 // =========================================================================
 mongoose.connect(CONFIG.MONGODB_URI, {
   useNewUrlParser: true,
@@ -197,7 +58,7 @@ mongoose.connect(CONFIG.MONGODB_URI, {
 });
 
 // =========================================================================
-//                   MQTT CLIENT
+//            MQTT CLIENT
 // =========================================================================
 const mqttClient = mqtt.connect(CONFIG.MQTT_BROKER, {
   reconnectPeriod: 5000
@@ -255,7 +116,7 @@ mqttClient.on('message', async (topic, message) => {
 });
 
 // =========================================================================
-//                   API ROUTES - RESEARCH FOCUSED
+//            API ROUTES - RESEARCH FOCUSED
 // =========================================================================
 
 // Start new experiment
@@ -559,14 +420,14 @@ app.get('/', (req, res) => {
 });
 
 // =========================================================================
-//                   SERVER START
+//            SERVER START
 // =========================================================================
 server.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║           🔬 AQUARIUM RESEARCH SYSTEM                    ║
+║        🔬 AQUARIUM RESEARCH SYSTEM                      ║
 ╠══════════════════════════════════════════════════════════╣
-║ 🌐 Server:    http://localhost:${CONFIG.PORT}           
+║ 🌐 Server:    http://localhost:${CONFIG.PORT}            
 ║ 📊 Database:  ${CONFIG.MONGODB_URI}
 ║ 🔌 MQTT:      ${CONFIG.MQTT_BROKER}
 ╚══════════════════════════════════════════════════════════╝
