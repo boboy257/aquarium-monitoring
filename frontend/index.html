@@ -2,14 +2,21 @@
 <html lang="id">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Aquarium Research Dashboard</title>
 
+  <!-- Tailwind CSS (CDN Prebuilt for Dev) -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- External Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
@@ -157,9 +164,8 @@
     select:focus,
     textarea:focus {
       outline: none;
-      ring: 2px;
-      ring-color: #3b82f6;
       border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
     }
 
     .btn-primary {
@@ -207,6 +213,7 @@
   <nav class="bg-white shadow-sm border-b sticky top-0 z-50">
     <div class="container mx-auto max-w-7xl px-4">
       <div class="flex justify-between items-center h-16">
+        <!-- Logo -->
         <div class="flex items-center space-x-3">
           <i data-lucide="microscope" class="w-8 h-8 text-blue-600"></i>
           <div>
@@ -214,20 +221,37 @@
             <p class="text-xs text-gray-500">Control System Dashboard</p>
           </div>
         </div>
-        <div class="flex items-center space-x-2">
-          <button onclick="showTab('dashboard')" class="tab-button active" id="tab-btn-dashboard">
-            Dashboard
-          </button>
-          <button onclick="showTab('experiments')" class="tab-button" id="tab-btn-experiments">
-            Experiments
-          </button>
-          <button onclick="showTab('analysis')" class="tab-button" id="tab-btn-analysis">
-            Analysis
-          </button>
+
+        <!-- Desktop Tabs -->
+        <div class="hidden md:flex items-center space-x-2">
+          <button onclick="showTab('dashboard')" class="tab-button active" id="tab-btn-dashboard">Dashboard</button>
+          <button onclick="showTab('experiments')" class="tab-button" id="tab-btn-experiments">Experiments</button>
+          <button onclick="showTab('analysis')" class="tab-button" id="tab-btn-analysis">Analysis</button>
           <div class="ml-4 flex items-center space-x-2 px-3 py-1.5 rounded-full" id="connection-status">
             <span class="pulse-dot w-2 h-2 bg-gray-400 rounded-full"></span>
             <span class="text-xs font-medium text-gray-500">Connecting...</span>
           </div>
+        </div>
+
+        <!-- Mobile Hamburger -->
+        <button class="md:hidden text-gray-600" onclick="toggleMobileMenu()">
+          <i data-lucide="menu" class="w-6 h-6"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="hidden md:hidden bg-white border-t">
+      <div class="container mx-auto max-w-7xl px-4 py-4 space-y-3">
+        <button onclick="showTabAndClose('dashboard')"
+          class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium">Dashboard</button>
+        <button onclick="showTabAndClose('experiments')"
+          class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium">Experiments</button>
+        <button onclick="showTabAndClose('analysis')"
+          class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium">Analysis</button>
+        <div class="px-4 py-2 flex items-center space-x-2 bg-gray-50 rounded-lg">
+          <span class="pulse-dot w-2 h-2 bg-gray-400 rounded-full"></span>
+          <span class="text-xs font-medium text-gray-500" id="mobile-connection-status">Connecting...</span>
         </div>
       </div>
     </div>
@@ -236,9 +260,8 @@
   <!-- Main Content -->
   <div class="container mx-auto max-w-7xl px-4 py-6">
 
-    <!-- ==================== DASHBOARD TAB ==================== -->
+    <!-- DASHBOARD TAB -->
     <div id="tab-dashboard" class="tab-content">
-
       <!-- Real-time Metrics Cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div class="card p-4">
@@ -252,7 +275,6 @@
             </div>
           </div>
         </div>
-
         <div class="card p-4">
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-amber-100 rounded-lg">
@@ -264,7 +286,6 @@
             </div>
           </div>
         </div>
-
         <div class="card p-4">
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-green-100 rounded-lg">
@@ -276,7 +297,6 @@
             </div>
           </div>
         </div>
-
         <div class="card p-4">
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-red-100 rounded-lg">
@@ -288,7 +308,6 @@
             </div>
           </div>
         </div>
-
         <div class="card p-4">
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-purple-100 rounded-lg">
@@ -313,7 +332,6 @@
             <canvas id="chartTemp"></canvas>
           </div>
         </div>
-
         <div class="card p-6">
           <h3 class="text-lg font-bold mb-4 flex items-center">
             <i data-lucide="bar-chart-2" class="w-5 h-5 mr-2 text-amber-600"></i>
@@ -390,7 +408,6 @@
               </div>
             </div>
           </div>
-
           <div class="border-2 border-amber-100 rounded-xl p-4 bg-amber-50/50">
             <h4 class="font-bold text-amber-700 mb-3 flex items-center">
               <i data-lucide="droplet" class="w-4 h-4 mr-2"></i>
@@ -417,19 +434,15 @@
           </div>
         </div>
       </div>
-
     </div>
 
-    <!-- ==================== EXPERIMENTS TAB ==================== -->
+    <!-- EXPERIMENTS TAB -->
     <div id="tab-experiments" class="tab-content hidden">
-
-      <!-- New Experiment Form -->
       <div class="card p-6 mb-6">
         <h3 class="text-lg font-bold mb-4 flex items-center">
           <i data-lucide="plus-circle" class="w-5 h-5 mr-2 text-green-600"></i>
           Start New Experiment
         </h3>
-
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
             <label class="block text-sm font-medium mb-2">Control Mode</label>
@@ -452,7 +465,6 @@
           </div>
         </div>
 
-        <!-- PID Parameters -->
         <div id="pid-params" class="mb-4 hidden">
           <h4 class="font-semibold mb-3 text-gray-700">PID Parameters</h4>
           <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -489,29 +501,24 @@
         </button>
       </div>
 
-      <!-- Experiment List -->
       <div class="card p-6">
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-lg font-bold flex items-center">
             <i data-lucide="list" class="w-5 h-5 mr-2 text-gray-700"></i>
             Recent Experiments
           </h3>
-          <button onclick="loadExperiments()"
-            class="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1">
-            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-            <span>Refresh</span>
+          <button onclick="loadExperiments()" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>Refresh
           </button>
         </div>
         <div id="experiment-list" class="space-y-3">
           <p class="text-gray-500 text-center py-8">Loading experiments...</p>
         </div>
       </div>
-
     </div>
 
-    <!-- ==================== ANALYSIS TAB ==================== -->
+    <!-- ANALYSIS TAB -->
     <div id="tab-analysis" class="tab-content hidden">
-
       <div class="card p-6">
         <h3 class="text-lg font-bold mb-4 flex items-center">
           <i data-lucide="git-compare" class="w-5 h-5 mr-2 text-indigo-600"></i>
@@ -519,7 +526,6 @@
         </h3>
         <p class="text-gray-600 mb-6">Select two completed experiments to compare their performance metrics
           side-by-side.</p>
-
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div>
             <label class="block text-sm font-medium mb-2">Experiment 1</label>
@@ -534,32 +540,21 @@
             </select>
           </div>
         </div>
-
         <button onclick="compareExperiments()" class="btn-primary flex items-center space-x-2">
           <i data-lucide="git-compare-arrows" class="w-5 h-5"></i>
           <span>Compare Experiments</span>
         </button>
-
-        <div id="comparison-results" class="mt-6">
-          <!-- Results will appear here -->
-        </div>
+        <div id="comparison-results" class="mt-6"></div>
       </div>
-
     </div>
 
   </div>
 
-  <!-- Load external script -->
+  <!-- Import external script -->
   <script src="script.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide/dist/umd/lucide.min.js"></script>
-  
   <script>
     lucide.createIcons();
   </script>
-  </body>
-  
-  </html>
-
 </body>
 
 </html>

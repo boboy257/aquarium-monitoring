@@ -20,14 +20,14 @@ function showNotification(message, type = 'info') {
     info: 'bg-blue-500',
     warning: 'bg-yellow-500'
   };
-  
+
   const icons = {
     success: '✓',
     error: '✕',
     info: 'ℹ',
     warning: '⚠'
   };
-  
+
   const notif = document.createElement('div');
   notif.className = `notification ${colors[type]} text-white px-6 py-4 rounded-lg shadow-2xl flex items-center space-x-3 max-w-md`;
   notif.innerHTML = `
@@ -35,7 +35,7 @@ function showNotification(message, type = 'info') {
     <span class="font-medium">${message}</span>
   `;
   document.body.appendChild(notif);
-  
+
   setTimeout(() => {
     notif.style.animation = 'slideOut 0.3s ease-in';
     setTimeout(() => notif.remove(), 300);
@@ -45,21 +45,30 @@ function showNotification(message, type = 'info') {
 function updateConnectionStatus(connected) {
   isConnected = connected;
   const statusEl = document.getElementById('connection-status');
-  if (!statusEl) return;
-  
-  if (connected) {
-    statusEl.className = 'ml-4 flex items-center space-x-2 px-3 py-1.5 rounded-full bg-green-100';
+  const mobileStatusEl = document.getElementById('mobile-connection-status');
+  const dotEl = document.querySelector('#connection-status .pulse-dot');
+  const mobileDotEl = document.querySelector('#mobile-menu .pulse-dot');
+
+  const colorClass = connected ? 'bg-green-500' : 'bg-red-500';
+  const statusText = connected ? 'Connected' : 'Disconnected';
+  const bgColorClass = connected ? 'bg-green-100' : 'bg-red-100';
+  const textColorClass = connected ? 'text-green-700' : 'text-red-700';
+
+  if (statusEl) {
+    statusEl.className = `ml-4 flex items-center space-x-2 px-3 py-1.5 rounded-full ${bgColorClass}`;
     statusEl.innerHTML = `
-      <span class="w-2 h-2 bg-green-500 rounded-full"></span>
-      <span class="text-xs font-medium text-green-700">Connected</span>
-    `;
-  } else {
-    statusEl.className = 'ml-4 flex items-center space-x-2 px-3 py-1.5 rounded-full bg-red-100';
-    statusEl.innerHTML = `
-      <span class="pulse-dot w-2 h-2 bg-red-500 rounded-full"></span>
-      <span class="text-xs font-medium text-red-700">Disconnected</span>
+      <span class="w-2 h-2 ${colorClass} rounded-full"></span>
+      <span class="text-xs font-medium ${textColorClass}">${statusText}</span>
     `;
   }
+
+  if (mobileStatusEl) {
+    mobileStatusEl.textContent = statusText;
+    mobileStatusEl.className = `text-xs font-medium ${textColorClass}`;
+  }
+
+  if (dotEl) dotEl.className = `w-2 h-2 ${colorClass} rounded-full`;
+  if (mobileDotEl) mobileDotEl.className = `w-2 h-2 ${colorClass} rounded-full`;
 }
 
 function formatNumber(num, decimals = 2) {
@@ -71,24 +80,25 @@ function formatNumber(num, decimals = 2) {
 //                   TAB MANAGEMENT
 // =========================================================================
 function showTab(tabName) {
-  // Hide all tabs
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-  
-  // Show selected tab
+
   document.getElementById(`tab-${tabName}`).classList.remove('hidden');
   document.getElementById(`tab-btn-${tabName}`).classList.add('active');
-  
-  // Load data for specific tabs
-  if (tabName === 'experiments') {
-    loadExperiments();
-  }
-  if (tabName === 'analysis') {
-    loadExperimentsForComparison();
-  }
-  
-  // Refresh icons
+
+  if (tabName === 'experiments') loadExperiments();
+  if (tabName === 'analysis') loadExperimentsForComparison();
+
   lucide.createIcons();
+}
+
+function toggleMobileMenu() {
+  document.getElementById('mobile-menu').classList.toggle('hidden');
+}
+
+function showTabAndClose(tabName) {
+  showTab(tabName);
+  document.getElementById('mobile-menu').classList.add('hidden');
 }
 
 // =========================================================================
@@ -96,7 +106,7 @@ function showTab(tabName) {
 // =========================================================================
 function connectSocket() {
   console.log('[Socket] Connecting to server...');
-  
+
   socket = io(API_BASE, {
     transports: ['websocket', 'polling'],
     timeout: 20000,
@@ -127,207 +137,113 @@ function connectSocket() {
     showNotification('Reconnected to server', 'success');
   });
 
-  socket.on('newData', (data) => {
-    updateDashboard(data);
-  });
-
-  socket.on('newMetrics', (metrics) => {
-    updateMetricsDisplay(metrics);
-  });
+  socket.on('newData', (data) => updateDashboard(data));
+  socket.on('newMetrics', (metrics) => updateMetricsDisplay(metrics));
 }
 
 // =========================================================================
 //                   DASHBOARD UPDATES
 // =========================================================================
 function updateDashboard(data) {
-  // Update status cards
   document.getElementById('current-temp').textContent = `${formatNumber(data.suhu)}°C`;
   document.getElementById('current-turb').textContent = `${formatNumber(data.turbidity_persen)}%`;
   document.getElementById('current-mode').textContent = data.kontrol_aktif || '--';
   document.getElementById('current-pwm-heater').textContent = `${formatNumber(data.pwm_heater, 1)}%`;
   document.getElementById('current-pwm-pump').textContent = `${formatNumber(data.pwm_pompa, 1)}%`;
 
-  // Add to buffer
   const timestamp = new Date();
   dataBuffer.push({
     time: timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     temp: data.suhu || 0,
     turb: data.turbidity_persen || 0
   });
-  
-  // Keep only last 50 points
+
   if (dataBuffer.length > 50) {
     dataBuffer.shift();
   }
-  
+
   updateCharts();
 }
 
 function updateMetricsDisplay(metrics) {
   if (!metrics || !metrics.temperature || !metrics.turbidity) return;
-  
+
   const t = metrics.temperature;
   const tb = metrics.turbidity;
-  
-  // Temperature metrics
-  document.getElementById('metric-temp-overshoot').textContent = 
-    t.overshoot_percent > 0 ? `${formatNumber(t.overshoot_percent)}%` : '--';
-  document.getElementById('metric-temp-settling').textContent = 
-    t.settling_time_s > 0 ? `${formatNumber(t.settling_time_s, 1)}s` : '--';
-  document.getElementById('metric-temp-sse').textContent = 
-    `${formatNumber(t.steady_state_error, 3)}°C`;
-  document.getElementById('metric-temp-peak').textContent = 
-    `${formatNumber(t.peak_value)}°C`;
-  
-  // Turbidity metrics
-  document.getElementById('metric-turb-overshoot').textContent = 
-    tb.overshoot_percent > 0 ? `${formatNumber(tb.overshoot_percent)}%` : '--';
-  document.getElementById('metric-turb-settling').textContent = 
-    tb.settling_time_s > 0 ? `${formatNumber(tb.settling_time_s, 1)}s` : '--';
-  document.getElementById('metric-turb-sse').textContent = 
-    `${formatNumber(tb.steady_state_error, 3)}%`;
-  document.getElementById('metric-turb-peak').textContent = 
-    `${formatNumber(tb.peak_value)}%`;
+
+  document.getElementById('metric-temp-overshoot').textContent = t.overshoot_percent > 0 ? `${formatNumber(t.overshoot_percent)}%` : '--';
+  document.getElementById('metric-temp-settling').textContent = t.settling_time_s > 0 ? `${formatNumber(t.settling_time_s, 1)}s` : '--';
+  document.getElementById('metric-temp-sse').textContent = `${formatNumber(t.steady_state_error, 3)}°C`;
+  document.getElementById('metric-temp-peak').textContent = `${formatNumber(t.peak_value)}°C`;
+
+  document.getElementById('metric-turb-overshoot').textContent = tb.overshoot_percent > 0 ? `${formatNumber(tb.overshoot_percent)}%` : '--';
+  document.getElementById('metric-turb-settling').textContent = tb.settling_time_s > 0 ? `${formatNumber(tb.settling_time_s, 1)}s` : '--';
+  document.getElementById('metric-turb-sse').textContent = `${formatNumber(tb.steady_state_error, 3)}%`;
+  document.getElementById('metric-turb-peak').textContent = `${formatNumber(tb.peak_value)}%`;
 }
 
 // =========================================================================
 //                   CHART MANAGEMENT
 // =========================================================================
 function initCharts() {
-  // Temperature Chart
   const ctxTemp = document.getElementById('chartTemp');
   if (ctxTemp) {
     chartTemp = new Chart(ctxTemp.getContext('2d'), {
       type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Temperature (°C)',
-          data: [],
-          borderColor: 'rgb(59, 130, 246)',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          borderWidth: 2,
-          tension: 0.4,
-          pointRadius: 2,
-          pointHoverRadius: 5
-        }]
-      },
+      data: { labels: [], datasets: [{ label: 'Temperature (°C)', data: [], borderColor: 'rgb(59, 130, 246)', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5 }] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: {
-          mode: 'index',
-          intersect: false
-        },
+        interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: { font: { size: 12, weight: '600' } }
-          },
-          tooltip: {
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            titleFont: { size: 13 },
-            bodyFont: { size: 12 },
-            padding: 12,
-            cornerRadius: 8
-          }
+          legend: { display: true, position: 'top', labels: { font: { size: 12, weight: '600' } } },
+          tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', titleFont: { size: 13 }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 8 }
         },
         scales: {
-          y: {
-            min: 20,
-            max: 35,
-            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-            title: {
-              display: true,
-              text: 'Temperature (°C)',
-              font: { size: 13, weight: '600' }
-            }
-          },
-          x: {
-            grid: { display: false },
-            ticks: { maxRotation: 45, minRotation: 0 }
-          }
+          y: { min: 20, max: 35, grid: { color: 'rgba(0, 0, 0, 0.05)' }, title: { display: true, text: 'Temperature (°C)', font: { size: 13, weight: '600' } } },
+          x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0 } }
         },
         animation: { duration: 0 }
       }
     });
   }
-  
-  // Turbidity Chart
+
   const ctxTurb = document.getElementById('chartTurb');
   if (ctxTurb) {
     chartTurb = new Chart(ctxTurb.getContext('2d'), {
       type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Turbidity (%)',
-          data: [],
-          borderColor: 'rgb(245, 158, 11)',
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          borderWidth: 2,
-          tension: 0.4,
-          pointRadius: 2,
-          pointHoverRadius: 5
-        }]
-      },
+      data: { labels: [], datasets: [{ label: 'Turbidity (%)', data: [], borderColor: 'rgb(245, 158, 11)', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5 }] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: {
-          mode: 'index',
-          intersect: false
-        },
+        interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: { font: { size: 12, weight: '600' } }
-          },
-          tooltip: {
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            titleFont: { size: 13 },
-            bodyFont: { size: 12 },
-            padding: 12,
-            cornerRadius: 8
-          }
+          legend: { display: true, position: 'top', labels: { font: { size: 12, weight: '600' } } },
+          tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', titleFont: { size: 13 }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 8 }
         },
         scales: {
-          y: {
-            min: 0,
-            max: 100,
-            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-            title: {
-              display: true,
-              text: 'Turbidity (%)',
-              font: { size: 13, weight: '600' }
-            }
-          },
-          x: {
-            grid: { display: false },
-            ticks: { maxRotation: 45, minRotation: 0 }
-          }
+          y: { min: 0, max: 100, grid: { color: 'rgba(0, 0, 0, 0.05)' }, title: { display: true, text: 'Turbidity (%)', font: { size: 13, weight: '600' } } },
+          x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0 } }
         },
         animation: { duration: 0 }
       }
     });
   }
-  
+
   console.log('[Charts] ✅ Initialized');
 }
 
 function updateCharts() {
   if (!chartTemp || !chartTurb || dataBuffer.length === 0) return;
-  
+
   const labels = dataBuffer.map(d => d.time);
   const tempData = dataBuffer.map(d => d.temp);
   const turbData = dataBuffer.map(d => d.turb);
-  
+
   chartTemp.data.labels = labels;
   chartTemp.data.datasets[0].data = tempData;
   chartTemp.update('none');
-  
+
   chartTurb.data.labels = labels;
   chartTurb.data.datasets[0].data = turbData;
   chartTurb.update('none');
@@ -340,27 +256,21 @@ async function updateControl() {
   const mode = document.getElementById('control-mode').value;
   const tempSp = parseFloat(document.getElementById('control-temp-sp').value);
   const turbSp = parseFloat(document.getElementById('control-turb-sp').value);
-  
+
   if (isNaN(tempSp) || isNaN(turbSp)) {
     showNotification('Please enter valid numbers', 'error');
     return;
   }
-  
-  const payload = {
-    kontrol_aktif: mode,
-    suhu_setpoint: tempSp,
-    keruh_setpoint: turbSp
-  };
-  
+
+  const payload = { kontrol_aktif: mode, suhu_setpoint: tempSp, keruh_setpoint: turbSp };
+
   try {
     const res = await fetch(`${API_BASE}/api/control`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    
     const result = await res.json();
     console.log('[Control] Updated:', result);
     showNotification('Settings sent to ESP32', 'success');
@@ -374,7 +284,6 @@ async function loadControlSettings() {
   try {
     const res = await fetch(`${API_BASE}/api/control`);
     const control = await res.json();
-    
     document.getElementById('control-mode').value = control.kontrol_aktif || 'Fuzzy';
     document.getElementById('control-temp-sp').value = control.suhu_setpoint || 28.0;
     document.getElementById('control-turb-sp').value = control.keruh_setpoint || 10.0;
@@ -391,20 +300,14 @@ async function startExperiment() {
   const tempSp = parseFloat(document.getElementById('exp-temp-sp').value);
   const turbSp = parseFloat(document.getElementById('exp-turb-sp').value);
   const duration = parseInt(document.getElementById('exp-duration').value) * 60000;
-  
+
   if (isNaN(tempSp) || isNaN(turbSp) || isNaN(duration)) {
     showNotification('Please fill all fields correctly', 'error');
     return;
   }
-  
-  const payload = {
-    control_mode: mode,
-    suhu_setpoint: tempSp,
-    keruh_setpoint: turbSp,
-    duration_ms: duration
-  };
-  
-  // Add PID parameters if PID mode
+
+  const payload = { control_mode: mode, suhu_setpoint: tempSp, keruh_setpoint: turbSp, duration_ms: duration };
+
   if (mode === 'PID') {
     payload.pid_params = {
       kp_suhu: parseFloat(document.getElementById('exp-kp-temp').value),
@@ -415,7 +318,7 @@ async function startExperiment() {
       kd_keruh: parseFloat(document.getElementById('exp-kd-turb').value)
     };
   }
-  
+
   try {
     console.log('[Experiment] Starting:', payload);
     const res = await fetch(`${API_BASE}/api/experiment/start`, {
@@ -423,19 +326,12 @@ async function startExperiment() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    
     const result = await res.json();
     console.log('[Experiment] Started:', result);
     showNotification(`Experiment started: ${result.experiment.experiment_id}`, 'success');
-    
     currentExperimentId = result.experiment.experiment_id;
-    
-    setTimeout(() => {
-      showTab('experiments');
-      loadExperiments();
-    }, 1000);
+    setTimeout(() => { showTab('experiments'); loadExperiments(); }, 1000);
   } catch (error) {
     console.error('[Experiment] Start error:', error);
     showNotification('Failed to start experiment: ' + error.message, 'error');
@@ -444,14 +340,9 @@ async function startExperiment() {
 
 async function stopExperiment(id) {
   if (!confirm(`Stop experiment ${id}?`)) return;
-  
   try {
-    const res = await fetch(`${API_BASE}/api/experiment/stop/${id}`, {
-      method: 'POST'
-    });
-    
+    const res = await fetch(`${API_BASE}/api/experiment/stop/${id}`, { method: 'POST' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    
     showNotification('Experiment stopped', 'success');
     setTimeout(() => loadExperiments(), 1000);
   } catch (error) {
@@ -464,15 +355,13 @@ async function loadExperiments() {
   try {
     const res = await fetch(`${API_BASE}/api/experiments`);
     const experiments = await res.json();
-    
     const container = document.getElementById('experiment-list');
     if (experiments.length === 0) {
       container.innerHTML = '<p class="text-gray-500 text-center py-8">No experiments yet</p>';
       return;
     }
-    
+
     container.innerHTML = '';
-    
     experiments.forEach(exp => {
       const statusClass = {
         running: 'status-running',
@@ -480,7 +369,7 @@ async function loadExperiments() {
         stopped: 'status-stopped',
         pending: 'status-pending'
       }[exp.status] || 'status-pending';
-      
+
       const card = document.createElement('div');
       card.className = 'experiment-card border-2 rounded-xl p-4';
       card.innerHTML = `
@@ -514,18 +403,15 @@ async function loadExperiments() {
             <button onclick="stopExperiment('${exp.experiment_id}')" 
                     class="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition">
               Stop
-            </button>
-          ` : ''}
+            </button>` : ''}
         </div>
       `;
       container.appendChild(card);
     });
-    
     lucide.createIcons();
   } catch (error) {
     console.error('[Experiments] Load error:', error);
-    document.getElementById('experiment-list').innerHTML = 
-      '<p class="text-red-500 text-center py-8">Error loading experiments</p>';
+    document.getElementById('experiment-list').innerHTML = '<p class="text-red-500 text-center py-8">Error loading experiments</p>';
   }
 }
 
@@ -533,7 +419,6 @@ async function viewExperiment(id) {
   try {
     const res = await fetch(`${API_BASE}/api/experiment/${id}`);
     const data = await res.json();
-    
     const metricsHtml = `
       <strong>Temperature Metrics:</strong><br>
       Overshoot: ${formatNumber(data.experiment.results.temperature?.overshoot_percent)}%<br>
@@ -547,7 +432,6 @@ async function viewExperiment(id) {
       
       <strong>Data Points:</strong> ${data.data_count}
     `;
-    
     const popup = document.createElement('div');
     popup.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
     popup.innerHTML = `
@@ -579,10 +463,8 @@ async function loadExperimentsForComparison() {
   try {
     const res = await fetch(`${API_BASE}/api/experiments?status=completed`);
     const experiments = await res.json();
-    
     const select1 = document.getElementById('compare-exp1');
     const select2 = document.getElementById('compare-exp2');
-    
     [select1, select2].forEach(select => {
       select.innerHTML = '<option value="">-- Select Experiment --</option>';
       experiments.forEach(exp => {
@@ -600,16 +482,13 @@ async function loadExperimentsForComparison() {
 async function compareExperiments() {
   const id1 = document.getElementById('compare-exp1').value;
   const id2 = document.getElementById('compare-exp2').value;
-  
   if (!id1 || !id2) {
     showNotification('Please select both experiments', 'warning');
     return;
   }
-  
   try {
     const res = await fetch(`${API_BASE}/api/compare/${id1}/${id2}`);
     const comparison = await res.json();
-    
     const container = document.getElementById('comparison-results');
     container.innerHTML = `
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -631,7 +510,6 @@ async function compareExperiments() {
             <p>SSE: ${formatNumber(comparison.experiment1.info.results.turbidity.steady_state_error, 3)}%</p>
           </div>
         </div>
-        
         <div class="border-2 border-green-200 rounded-xl p-5 bg-green-50">
           <h4 class="font-bold text-lg mb-3 text-green-800">${comparison.experiment2.info.control_mode}</h4>
           <div class="space-y-2 text-sm">
@@ -652,7 +530,6 @@ async function compareExperiments() {
         </div>
       </div>
     `;
-    
     showNotification('Comparison loaded', 'success');
   } catch (error) {
     console.error('[Comparison] Error:', error);
@@ -663,26 +540,18 @@ async function compareExperiments() {
 // =========================================================================
 //                   EVENT LISTENERS
 // =========================================================================
-document.getElementById('exp-mode').addEventListener('change', (e) => {
-  const pidParams = document.getElementById('pid-params');
-  pidParams.classList.toggle('hidden', e.target.value !== 'PID');
-});
-
-// =========================================================================
-//                   INITIALIZATION
-// =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[App] 🚀 Initializing...');
-  
-  // Initialize components
   initCharts();
   connectSocket();
   loadControlSettings();
-  
-  // Initialize icons
   lucide.createIcons();
-  
   console.log('[App] ✅ Ready');
+});
+
+document.getElementById('exp-mode').addEventListener('change', (e) => {
+  const pidParams = document.getElementById('pid-params');
+  pidParams.classList.toggle('hidden', e.target.value !== 'PID');
 });
 
 // Cleanup
