@@ -142,7 +142,7 @@ const Experiment = mongoose.model('Experiment', experimentSchema);
 //                   Enhanced server.js with Research Features
 // =========================================================================
 const express = require('express');
-const mongoose = require('mongoose');
+//const mongoose = require('mongoose');
 const mqtt = require('mqtt');
 const http = require('http');
 const socketIo = require('socket.io');
