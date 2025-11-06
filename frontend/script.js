@@ -1,401 +1,331 @@
-// Base URL untuk API
-//const API_BASE_URL = 'http://localhost:3000';
-const API_BASE_URL = ''; // Ganti dengan IP kamu
+// Global State
+    let chartTemp, chartTurb, socket;
+    let dataBuffer = [];
+    let currentExperimentId = null;
 
-// Deklarasi variabel di awal
-var chartSuhu; // Chart.js instance untuk suhu
-var chartKekeruhan; // Chart.js instance untuk kekeruhan
-var socket;
-var dataBuffer = [];
+    // Tab Management
+    function showTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
 
-// Fungsi connect socket
-function connectSocket() {
-  console.log('Mencoba connect socket...');
-  socket = io(API_BASE_URL, {
-    transports: ['websocket', 'polling'],
-    timeout: 20000
-  });
-
-  socket.on('connect', function() {
-    console.log('Connected to server via Socket.io');
-  });
-
-  socket.on('disconnect', function(reason) {
-    console.log('Disconnected from server:', reason);
-    setTimeout(connectSocket, 5000); // Coba connect ulang setiap 5 detik
-  });
-
-  socket.on('connect_error', function(error) {
-    console.error('Socket connection error:', error);
-    alert('Gagal terhubung ke server. Pastikan backend berjalan di http://localhost:3000');
-  });
-
-  // Handler untuk data baru
-  socket.on('newData', function(data) {
-    console.log('Data diterima (real-time):', data);
-    // Update status
-    document.getElementById('suhu-value').textContent = data.suhu !== undefined ? data.suhu.toFixed(2) + '°C' : 'N/A';
-    document.getElementById('turbidity-value').textContent = data.turbidity_persen !== undefined ? data.turbidity_persen.toFixed(2) + '%' : 'N/A';
-    document.getElementById('kontrol-value').textContent = data.kontrol_aktif || 'N/A';
-    document.getElementById('pwm-value').textContent = data.pwm_heater !== undefined ? data.pwm_heater + '%' : 'N/A';
-    document.getElementById('pwm-pompa-value').textContent = data.pwm_pompa !== undefined ? data.pwm_pompa + '%' : 'N/A'; // Tambahkan baris ini
-
-    // Validasi timestamp
-    var timestamp = new Date(data.timestamp);
-    if (isNaN(timestamp.getTime())) {
-      // Jika timestamp tidak valid, gunakan waktu sekarang
-      timestamp = new Date();
-    }
-
-    // Add to buffer
-    dataBuffer.push({
-      timestamp: timestamp,
-      suhu: data.suhu,
-      turbidity: data.turbidity_persen, // Gunakan field baru
-      pwm_heater: data.pwm_heater,      // Tambahkan field baru
-      pwm_pompa: data.pwm_pompa,        // Tambahkan field baru
-      kontrol: data.kontrol_aktif
-    });
-
-    // Keep only last 50 data points
-    if (dataBuffer.length > 50) {
-      dataBuffer.shift();
-    }
-
-    // Update chart-chart if they exist
-    if (chartSuhu && chartKekeruhan) {
-      console.log('Mencoba update chart-chart (real-time)...');
-      try {
-        var labels = dataBuffer.map(function(d) {
-          return d.timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        });
-        var suhuData = dataBuffer.map(function(d) { return d.suhu; });
-        // Gunakan field baru di chart
-        var kekeruhanData = dataBuffer.map(function(d) { return d.turbidity; }); // Ambil dari buffer yang sudah diperbarui
-
-        // Ambil setpoint dari form
-        var setpointValue = parseFloat(document.getElementById('setpoint').value);
-        var setpointKeruhValue = parseFloat(document.getElementById('keruh_setpoint').value); // Ambil dari form
-
-        // Update chartSuhu
-        chartSuhu.data.labels = labels;
-        chartSuhu.data.datasets[0].data = suhuData;
-        chartSuhu.data.datasets[1].data = Array(suhuData.length).fill(setpointValue); // Update garis setpoint
-        chartSuhu.update('none');
-
-        // Update chartKekeruhan
-        chartKekeruhan.data.labels = labels;
-        chartKekeruhan.data.datasets[0].data = kekeruhanData;
-        // Update garis setpoint kekeruhan
-        chartKekeruhan.data.datasets[1].data = Array(kekeruhanData.length).fill(setpointKeruhValue); // Gunakan input form
-        chartKekeruhan.update('none');
-
-        console.log('Chart-chart updated successfully (real-time)');
-      } catch (error) {
-        console.error('Error updating chart-chart (real-time):', error);
+      if (tabName === 'experiments') {
+        loadExperiments();
+      }
+      if (tabName === 'analysis') {
+        loadExperimentsForComparison();
       }
     }
-  });
-}
 
-// Load initial control settings
-async function loadControl() {
-  console.log('Mencoba load control...');
-  try {
-    var res = await fetch('/api/control');
-    console.log('Response status:', res.status);
-    var control = await res.json();
-    console.log('Control ', control);
-
-    document.getElementById('mode').value = control.kontrol_aktif;
-    document.getElementById('setpoint').value = control.suhu_setpoint;
-    document.getElementById('kp').value = control.kp_suhu; // Ambil dari backend
-    document.getElementById('ki').value = control.ki_suhu; // Ambil dari backend
-    document.getElementById('kd').value = control.kd_suhu; // Ambil dari backend
-    document.getElementById('keruh_setpoint').value = control.keruh_setpoint; // Ambil dari backend
-    document.getElementById('kp_keruh').value = control.kp_keruh; // Ambil dari backend
-    document.getElementById('ki_keruh').value = control.ki_keruh; // Ambil dari backend
-    document.getElementById('kd_keruh').value = control.kd_keruh; // Ambil dari backend
-  } catch (error) {
-    console.error('Error loading control:', error);
-    alert('Gagal mengakses backend. Pastikan server berjalan di http://localhost:3000');
-  }
-}
-
-// Save Control Function (Harus di-define di global scope)
-async function saveControl() {
-  var kontrol_aktif = document.getElementById('mode').value;
-  var suhu_setpoint = parseFloat(document.getElementById('setpoint').value);
-  var kp_suhu = parseFloat(document.getElementById('kp').value); // Ganti nama variabel
-  var ki_suhu = parseFloat(document.getElementById('ki').value); // Ganti nama variabel
-  var kd_suhu = parseFloat(document.getElementById('kd').value); // Ganti nama variabel
-  var keruh_setpoint = parseFloat(document.getElementById('keruh_setpoint').value); // Ambil dari form
-  var kp_keruh = parseFloat(document.getElementById('kp_keruh').value); // Ambil dari form
-  var ki_keruh = parseFloat(document.getElementById('ki_keruh').value); // Ambil dari form
-  var kd_keruh = parseFloat(document.getElementById('kd_keruh').value); // Ambil dari form
-
-  console.log('Mengirim control:', { kontrol_aktif, suhu_setpoint, kp_suhu, ki_suhu, kd_suhu, keruh_setpoint, kp_keruh, ki_keruh, kd_keruh }); // Log diperbarui
-  try {
-    var res = await fetch(API_BASE_URL + '/api/control', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kontrol_aktif: kontrol_aktif,
-        suhu_setpoint: suhu_setpoint,
-        kp_suhu: kp_suhu, // Kirim dengan nama field baru
-        ki_suhu: ki_suhu, // Kirim dengan nama field baru
-        kd_suhu: kd_suhu, // Kirim dengan nama field baru
-        keruh_setpoint: keruh_setpoint, // Kirim dengan nama field baru
-        kp_keruh: kp_keruh, // Kirim dengan nama field baru
-        ki_keruh: ki_keruh, // Kirim dengan nama field baru
-        kd_keruh: kd_keruh  // Kirim dengan nama field baru
-      })
-    });
-    console.log('Response status:', res.status);
-
-    if (res.status === 200) {
-      alert('Control updated and sent to ESP32');
-      // Muat ulang kontrol untuk konfirmasi
-      loadControl();
-    } else {
-      alert('Gagal mengirim control ke ESP32. Status: ' + res.status);
-    }
-  } catch (error) {
-    console.error('Error saving control:', error);
-    alert('Gagal mengirim control ke backend: ' + error.message);
-  }
-}
-
-// Export CSV Function (Harus di-define di global scope)
-async function exportCSV() {
-  var startDate = document.getElementById('start-date').value;
-  var endDate = document.getElementById('end-date').value;
-
-  var url = API_BASE_URL + '/api/export';
-  if (startDate && endDate) {
-    url += '?start=' + startDate + '&end=' + endDate;
-  } else {
-    // Jika tidak ada filter, export semua data
-    alert('Silakan pilih rentang tanggal untuk export data.');
-    return;
-  }
-
-  console.log('Exporting CSV:', url);
-  window.open(url);
-}
-
-// Fungsi untuk load data awal (tanpa filter)
-async function loadInitialData() {
-  console.log('Mencoba load data awal...');
-
-  // Ambil data terakhir 50 dari API
-  var url = API_BASE_URL + '/api/data';
-
-  console.log('Requesting:', url);
-  try {
-    var res = await fetch(url);
-    console.log('Response status:', res.status);
-    var data = await res.json();
-    console.log('Data received:', data.length, 'items');
-
-    if (data.length === 0) {
-      // Jika tidak ada data, buat chart-chart kosong
-      createChartSuhu([], [], 28.0); // Default setpoint
-      createChartKekeruhan([], [], 5.0); // Default setpoint keruh
-      return;
-    }
-
-    // Validasi timestamp di data dari API
-    var labels = data.map(function(d) {
-      var timestamp = new Date(d.timestamp);
-      if (isNaN(timestamp.getTime())) {
-        timestamp = new Date();
-      }
-      return timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    // Toggle PID parameters visibility
+    document.getElementById('exp-mode').addEventListener('change', (e) => {
+      document.getElementById('pid-params').classList.toggle('hidden', e.target.value !== 'PID');
     });
 
-    var suhuData = data.map(function(d) { return d.suhu; });
-    // Ambil data dari API - gunakan field baru
-    var turbidityData = data.map(function(d) { return d.turbidity_persen; }); // Gunakan field baru
+    // Socket.IO Connection
+    function connectSocket() {
+      socket = io('', { transports: ['websocket', 'polling'] });
 
-    // Update buffer - gunakan field baru
-    dataBuffer = data.map(function(d) {
-      return {
-        timestamp: new Date(d.timestamp),
-        suhu: d.suhu,
-        turbidity: d.turbidity_persen, // Gunakan field baru
-        pwm_heater: d.pwm_heater,      // Tambahkan field baru
-        pwm_pompa: d.pwm_pompa,        // Tambahkan field baru
-        kontrol: d.kontrol_aktif
+      socket.on('connect', () => {
+        console.log('[Socket] Connected');
+        showNotification('Connected to server', 'success');
+      });
+
+      socket.on('newData', (data) => {
+        updateDashboard(data);
+      });
+
+      socket.on('newMetrics', (metrics) => {
+        updateMetrics(metrics);
+      });
+
+      socket.on('disconnect', () => {
+        showNotification('Disconnected from server', 'error');
+      });
+    }
+
+    // Update Dashboard
+    function updateDashboard(data) {
+      document.getElementById('current-temp').textContent = `${data.suhu?.toFixed(2) || '--'}°C`;
+      document.getElementById('current-turb').textContent = `${data.turbidity_persen?.toFixed(2) || '--'}%`;
+      document.getElementById('current-mode').textContent = data.kontrol_aktif || '--';
+      document.getElementById('current-pwm-heater').textContent = `${data.pwm_heater?.toFixed(1) || '--'}%`;
+      document.getElementById('current-pwm-pump').textContent = `${data.pwm_pompa?.toFixed(1) || '--'}%`;
+
+      // Add to buffer
+      dataBuffer.push({
+        time: new Date().toLocaleTimeString('id-ID'),
+        temp: data.suhu || 0,
+        turb: data.turbidity_persen || 0
+      });
+
+      if (dataBuffer.length > 50) dataBuffer.shift();
+
+      updateCharts();
+    }
+
+    // Update Metrics Display
+    function updateMetrics(metrics) {
+      if (!metrics.temperature || !metrics.turbidity) return;
+
+      const t = metrics.temperature;
+      const tu = metrics.turbidity;
+
+      document.getElementById('metric-temp-overshoot').textContent = `${t.overshoot_percent?.toFixed(2) || 0}%`;
+      document.getElementById('metric-temp-settling').textContent = t.settling_time_s > 0 ? `${t.settling_time_s.toFixed(1)}s` : '--';
+      document.getElementById('metric-temp-sse').textContent = `${t.steady_state_error?.toFixed(3) || 0}°C`;
+      document.getElementById('metric-temp-peak').textContent = `${t.peak_value?.toFixed(2) || 0}°C`;
+
+      document.getElementById('metric-turb-overshoot').textContent = `${tu.overshoot_percent?.toFixed(2) || 0}%`;
+      document.getElementById('metric-turb-settling').textContent = tu.settling_time_s > 0 ? `${tu.settling_time_s.toFixed(1)}s` : '--';
+      document.getElementById('metric-turb-sse').textContent = `${tu.steady_state_error?.toFixed(3) || 0}%`;
+      document.getElementById('metric-turb-peak').textContent = `${tu.peak_value?.toFixed(2) || 0}%`;
+    }
+
+    // Update Charts
+    function updateCharts() {
+      if (!chartTemp || !chartTurb || dataBuffer.length === 0) return;
+
+      const labels = dataBuffer.map(d => d.time);
+      const tempData = dataBuffer.map(d => d.temp);
+      const turbData = dataBuffer.map(d => d.turb);
+
+      chartTemp.data.labels = labels;
+      chartTemp.data.datasets[0].data = tempData;
+      chartTemp.update('none');
+
+      chartTurb.data.labels = labels;
+      chartTurb.data.datasets[0].data = turbData;
+      chartTurb.update('none');
+    }
+
+    // Initialize Charts
+    function initCharts() {
+      const ctxTemp = document.getElementById('chartTemp').getContext('2d');
+      chartTemp = new Chart(ctxTemp, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Temperature (°C)',
+            data: [],
+            borderColor: 'rgb(59, 130, 246)',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            tension: 0.4,
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { min: 0, max: 40 }
+          },
+          animation: { duration: 0 }
+        }
+      });
+
+      const ctxTurb = document.getElementById('chartTurb').getContext('2d');
+      chartTurb = new Chart(ctxTurb, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Turbidity (%)',
+            data: [],
+            borderColor: 'rgb(245, 158, 11)',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            tension: 0.4,
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { min: 0, max: 100 }
+          },
+          animation: { duration: 0 }
+        }
+      });
+    }
+
+    // Start Experiment
+    async function startExperiment() {
+      const mode = document.getElementById('exp-mode').value;
+      const tempSp = parseFloat(document.getElementById('exp-temp-sp').value);
+      const turbSp = parseFloat(document.getElementById('exp-turb-sp').value);
+      const duration = parseInt(document.getElementById('exp-duration').value) * 60000;
+
+      const payload = {
+        control_mode: mode,
+        suhu_setpoint: tempSp,
+        keruh_setpoint: turbSp,
+        duration_ms: duration
       };
+
+      if (mode === 'PID') {
+        payload.pid_params = {
+          kp_suhu: parseFloat(document.getElementById('exp-kp-temp').value),
+          ki_suhu: parseFloat(document.getElementById('exp-ki-temp').value),
+          kd_suhu: parseFloat(document.getElementById('exp-kd-temp').value),
+          kp_keruh: parseFloat(document.getElementById('exp-kp-turb').value),
+          ki_keruh: parseFloat(document.getElementById('exp-ki-turb').value),
+          kd_keruh: parseFloat(document.getElementById('exp-kd-turb').value)
+        };
+      }
+
+      try {
+        const res = await fetch('/api/experiment/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await res.json();
+        if (result.success) {
+          showNotification('Experiment started!', 'success');
+          currentExperimentId = result.experiment.experiment_id;
+          setTimeout(() => loadExperiments(), 1000);
+        } else {
+          showNotification('Failed to start experiment', 'error');
+        }
+      } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+      }
+    }
+
+    // Load Experiments
+    async function loadExperiments() {
+      try {
+        const res = await fetch('/api/experiments');
+        const experiments = await res.json();
+
+        const container = document.getElementById('experiment-list');
+        container.innerHTML = '';
+
+        experiments.forEach(exp => {
+          const card = document.createElement('div');
+          card.className = 'experiment-card border rounded-lg p-4 hover:shadow-md cursor-pointer';
+          card.onclick = () => viewExperiment(exp.experiment_id);
+
+          const statusClass = exp.status === 'running' ? 'status-running' :
+            exp.status === 'completed' ? 'status-completed' : 'status-stopped';
+
+          card.innerHTML = `
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="flex items-center space-x-2 mb-2">
+                  <span class="font-semibold">${exp.control_mode}</span>
+                  <span class="metric-badge ${statusClass}">${exp.status}</span>
+                </div>
+                <p class="text-sm text-gray-600">ID: ${exp.experiment_id}</p>
+                <p class="text-xs text-gray-500 mt-1">Started: ${new Date(exp.started_at).toLocaleString('id-ID')}</p>
+              </div>
+              <div class="text-right text-sm">
+                <p class="text-gray-600">Temp: ${exp.config.suhu_setpoint}°C</p>
+                <p class="text-gray-600">Turb: ${exp.config.keruh_setpoint}%</p>
+              </div>
+            </div>
+          `;
+
+          container.appendChild(card);
+        });
+      } catch (error) {
+        console.error('Load experiments error:', error);
+      }
+    }
+
+    // View Experiment Details
+    async function viewExperiment(id) {
+      try {
+        const res = await fetch(`/api/experiment/${id}`);
+        const data = await res.json();
+
+        alert(`Experiment: ${id}\n\nData Points: ${data.data.length}\n\nExport: /api/experiment/${id}/export`);
+      } catch (error) {
+        showNotification('Error loading experiment', 'error');
+      }
+    }
+
+    // Load Experiments for Comparison
+    async function loadExperimentsForComparison() {
+      try {
+        const res = await fetch('/api/experiments?status=completed');
+        const experiments = await res.json();
+
+        const select1 = document.getElementById('compare-exp1');
+        const select2 = document.getElementById('compare-exp2');
+
+        [select1, select2].forEach(select => {
+          select.innerHTML = '<option value="">-- Select --</option>';
+          experiments.forEach(exp => {
+            const option = document.createElement('option');
+            option.value = exp.experiment_id;
+            option.textContent = `${exp.control_mode} - ${new Date(exp.started_at).toLocaleDateString()}`;
+            select.appendChild(option);
+          });
+        });
+      } catch (error) {
+        console.error('Load comparison error:', error);
+      }
+    }
+
+    // Compare Experiments
+    async function compareExperiments() {
+      const id1 = document.getElementById('compare-exp1').value;
+      const id2 = document.getElementById('compare-exp2').value;
+
+      if (!id1 || !id2) {
+        showNotification('Please select both experiments', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/compare/${id1}/${id2}`);
+        const comparison = await res.json();
+
+        const container = document.getElementById('comparison-results');
+        container.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="border rounded-lg p-4">
+              <h4 class="font-semibold mb-3">${comparison.experiment1.info.control_mode}</h4>
+              <p class="text-sm">Data Points: ${comparison.experiment1.data.length}</p>
+              <p class="text-sm">Temp Overshoot: ${comparison.experiment1.info.results?.temperature?.overshoot_percent?.toFixed(2) || 'N/A'}%</p>
+              <p class="text-sm">Temp Settling: ${comparison.experiment1.info.results?.temperature?.settling_time_s?.toFixed(2) || 'N/A'}s</p>
+            </div>
+            <div class="border rounded-lg p-4">
+              <h4 class="font-semibold mb-3">${comparison.experiment2.info.control_mode}</h4>
+              <p class="text-sm">Data Points: ${comparison.experiment2.data.length}</p>
+              <p class="text-sm">Temp Overshoot: ${comparison.experiment2.info.results?.temperature?.overshoot_percent?.toFixed(2) || 'N/A'}%</p>
+              <p class="text-sm">Temp Settling: ${comparison.experiment2.info.results?.temperature?.settling_time_s?.toFixed(2) || 'N/A'}s</p>
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        showNotification('Comparison failed', 'error');
+      }
+    }
+
+    // Notification System
+    function showNotification(message, type = 'info') {
+      const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        info: 'bg-blue-500'
+      };
+
+      const notif = document.createElement('div');
+      notif.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50`;
+      notif.textContent = message;
+      document.body.appendChild(notif);
+
+      setTimeout(() => notif.remove(), 3000);
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      initCharts();
+      connectSocket();
+      lucide.createIcons();
+      console.log('[Research Dashboard] Initialized');
     });
-
-    // Ambil setpoint dari form
-    var setpointValue = parseFloat(document.getElementById('setpoint').value);
-    var setpointKeruhValue = parseFloat(document.getElementById('keruh_setpoint').value); // Ambil dari form
-
-    // Buat chart-chart
-    createChartSuhu(labels, suhuData, setpointValue);
-    createChartKekeruhan(labels, turbidityData, setpointKeruhValue); // Gunakan setpoint dari form
-  } catch (error) {
-    console.error('Error loading initial ', error);
-    // Buat chart-chart kosong jika error
-    createChartSuhu([], [], 28.0); // Default
-    createChartKekeruhan([], [], 5.0); // Default
-  }
-}
-
-// ===================================================
-// === FUNGSI UNTUK MEMBUAT GRAFIK SUHU =============
-// ===================================================
-function createChartSuhu(labels, suhuData, setpointValue) {
-  if (chartSuhu) {
-    chartSuhu.destroy(); // Hancurkan chart lama
-  }
-
-  var ctx = document.getElementById('chartSuhu');
-  if (!ctx) {
-    console.error('Canvas chartSuhu tidak ditemukan!');
-    return;
-  }
-  var ctx2d = ctx.getContext('2d');
-
-  var config = {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Suhu (°C)',
-          data: suhuData,
-          borderColor: 'rgb(59, 130, 246)', // Biru
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          fill: true,
-          tension: 0.2,
-          yAxisID: 'y',
-          pointRadius: 1,
-          pointHoverRadius: 5
-        },
-        {
-          label: 'Setpoint Suhu',
-          data:Array(suhuData.length).fill(setpointValue), // Garis horizontal
-          borderColor: 'rgba(245, 3, 3, 1)', // Merah
-          borderDash: [5, 5], // Garis putus-putus
-          fill: false,
-          pointRadius: 0,
-          yAxisID: 'y'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top' },
-        tooltip: { mode: 'index', intersect: false }
-      },
-      interaction: { mode: 'index', intersect: false },
-      scales: {
-        x: { grid: { display: false } },
-        y: {
-          type: 'linear',
-          display: true,
-          position: 'left',
-          min: 0,
-          max: 40, // Sesuaikan range suhu
-          title: { display: true, text: 'Suhu (°C)' },
-          grid: { color: 'rgba(0, 0, 0, 0.05)' }
-        }
-      }
-    }
-  };
-
-  chartSuhu = new Chart(ctx2d, config);
-  console.log('Chart Suhu created successfully');
-}
-// ===================================================
-// === AKHIR FUNGSI GRAFIK SUHU =====================
-// ===================================================
-
-
-// ===================================================
-// === FUNGSI UNTUK MEMBUAT GRAFIK KEKERUHAN =======
-// ===================================================
-function createChartKekeruhan(labels, kekeruhanData, setpointKeruhValue) { // Tambahkan parameter setpoint
-  if (chartKekeruhan) {
-    chartKekeruhan.destroy(); // Hancurkan chart lama
-  }
-
-  var ctx = document.getElementById('chartKekeruhan');
-  if (!ctx) {
-    console.error('Canvas chartKekeruhan tidak ditemukan!');
-    return;
-  }
-  var ctx2d = ctx.getContext('2d');
-
-  var config = {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'Kekeruhan Air (%)',
-          data: kekeruhanData,
-          borderColor: 'rgb(245, 158, 11)', // Amber
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          fill: false, // Atau true jika ingin area terisi
-          tension: 0.2,
-          yAxisID: 'y',
-          pointRadius: 1,
-          pointHoverRadius: 5
-        },
-        // Tambahkan garis setpoint kekeruhan
-        {
-          label: 'Setpoint Kekeruhan',
-          data: Array(kekeruhanData.length).fill(setpointKeruhValue), // Gunakan setpoint dari parameter
-          borderColor: 'rgba(245, 3, 3, 1)', // Merah
-          borderDash: [5, 5], // Garis putus-putus
-          fill: false,
-          pointRadius: 0,
-          yAxisID: 'y'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top' },
-        tooltip: { mode: 'index', intersect: false }
-      },
-      interaction: { mode: 'index', intersect: false },
-      scales: {
-        x: { grid: { display: false } },
-        y: {
-          type: 'linear',
-          display: true,
-          position: 'left',
-          min: 0,
-          max: 100, // Karena persen
-          title: { display: true, text: 'Kekeruhan (%)' },
-          grid: { color: 'rgba(0, 0, 0, 0.05)' }
-        }
-      }
-    }
-  };
-
-  chartKekeruhan = new Chart(ctx2d, config);
-  console.log('Chart Kekeruhan created successfully');
-}
-// ===================================================
-// === AKHIR FUNGSI GRAFIK KEKERUHAN ================
-// ===================================================
-
-
-// Panggil fungsi connect socket
-console.log('Memulai dashboard...');
-connectSocket();
-
-// Load initial data and control settings
-loadControl();
-loadInitialData();

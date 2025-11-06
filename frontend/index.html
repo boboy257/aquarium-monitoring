@@ -1,214 +1,331 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aquarium Control Dashboard</title>
-
+  <title>Aquarium Research Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
   <script src="https://unpkg.com/lucide@latest"></script>
-
   <style>
-    /* Menerapkan font Inter sebagai default */
     body {
       font-family: 'Inter', sans-serif;
+    }
+
+    .experiment-card {
+      transition: all 0.3s;
+    }
+
+    .experiment-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .metric-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-running {
+      background: #10b981;
+      color: white;
+    }
+
+    .status-completed {
+      background: #6b7280;
+      color: white;
+    }
+
+    .status-stopped {
+      background: #ef4444;
+      color: white;
     }
   </style>
 </head>
 
-<body class="bg-slate-100">
+<body class="bg-gray-50">
 
-  <nav class="bg-white shadow-sm">
+  <!-- Navigation -->
+  <nav class="bg-white shadow-sm border-b">
     <div class="container mx-auto max-w-7xl px-4">
       <div class="flex justify-between items-center h-16">
-        <div class="flex items-center space-x-2">
-          <i data-lucide="waves" class="w-8 h-8 text-blue-600"></i>
-          <span class="text-xl font-bold text-gray-800">Aquarium Control</span>
+        <div class="flex items-center space-x-3">
+          <i data-lucide="microscope" class="w-8 h-8 text-blue-600"></i>
+          <span class="text-xl font-bold text-gray-800">Aquarium Research System</span>
+        </div>
+        <div class="flex items-center space-x-4">
+          <button onclick="showTab('dashboard')"
+            class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 transition">
+            Dashboard
+          </button>
+          <button onclick="showTab('experiments')"
+            class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 transition">
+            Experiments
+          </button>
+          <button onclick="showTab('analysis')"
+            class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 transition">
+            Analysis
+          </button>
         </div>
       </div>
     </div>
   </nav>
 
-  <div class="container mx-auto max-w-7xl px-4 py-8">
+  <!-- Main Content -->
+  <div class="container mx-auto max-w-7xl px-4 py-6">
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
-        <div class="flex-shrink-0 bg-blue-100 rounded-full p-3">
-          <i data-lucide="thermometer" class="w-7 h-7 text-blue-600"></i>
-        </div>
-        <div>
-          <h3 class="font-semibold text-lg text-gray-600">Suhu Terkini</h3>
-          <p id="suhu-value" class="text-3xl font-bold text-blue-600">-</p>
-        </div>
-      </div>
-      <!-- CARD TURBIDITY -->
-      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
-        <div class="flex-shrink-0 bg-amber-100 rounded-full p-3">
-          <i data-lucide="droplets" class="w-7 h-7 text-amber-600"></i>
-        </div>
-        <div>
-          <h3 class="font-semibold text-lg text-gray-600">Kekeruhan Air</h3>
-          <p id="turbidity-value" class="text-3xl font-bold text-amber-600">-</p>
-        </div>
-      </div>
-      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
-        <div class="flex-shrink-0 bg-green-100 rounded-full p-3">
-          <i data-lucide="sliders-horizontal" class="w-7 h-7 text-green-600"></i>
-        </div>
-        <div>
-          <h3 class="font-semibold text-lg text-gray-600">Kontrol Aktif</h3>
-          <p id="kontrol-value" class="text-2xl font-bold text-green-600">-</p>
-        </div>
-      </div>
-      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
-        <div class="flex-shrink-0 bg-red-100 rounded-full p-3">
-          <i data-lucide="gauge" class="w-7 h-7 text-red-600"></i>
-        </div>
-        <div>
-          <h3 class="font-semibold text-lg text-gray-600">PWM Heater</h3>
-          <p id="pwm-value" class="text-3xl font-bold text-red-600">-</p>
-        </div>
-      </div>
-      <!-- CARD PWM POMPA -->
-      <div class="bg-white rounded-xl shadow-lg p-6 flex items-center space-x-4">
-        <div class="flex-shrink-0 bg-purple-100 rounded-full p-3">
-          <i data-lucide="tornado" class="w-7 h-7 text-purple-600"></i>
-        </div>
-        <div>
-          <h3 class="font-semibold text-lg text-gray-600">PWM Pompa</h3>
-          <p id="pwm-pompa-value" class="text-3xl font-bold text-purple-600">-</p>
-        </div>
-      </div>
-    </div>
+    <!-- Dashboard Tab -->
+    <div id="tab-dashboard" class="tab-content">
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Real-time Metrics -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="flex items-center space-x-3">
+            <i data-lucide="thermometer" class="w-6 h-6 text-blue-600"></i>
+            <div>
+              <p class="text-xs text-gray-600">Suhu</p>
+              <p id="current-temp" class="text-xl font-bold text-blue-600">--</p>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="flex items-center space-x-3">
+            <i data-lucide="droplets" class="w-6 h-6 text-amber-600"></i>
+            <div>
+              <p class="text-xs text-gray-600">Kekeruhan</p>
+              <p id="current-turb" class="text-xl font-bold text-amber-600">--</p>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="flex items-center space-x-3">
+            <i data-lucide="activity" class="w-6 h-6 text-green-600"></i>
+            <div>
+              <p class="text-xs text-gray-600">Mode</p>
+              <p id="current-mode" class="text-lg font-bold text-green-600">--</p>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="flex items-center space-x-3">
+            <i data-lucide="zap" class="w-6 h-6 text-red-600"></i>
+            <div>
+              <p class="text-xs text-gray-600">PWM Heater</p>
+              <p id="current-pwm-heater" class="text-xl font-bold text-red-600">--</p>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4">
+          <div class="flex items-center space-x-3">
+            <i data-lucide="tornado" class="w-6 h-6 text-purple-600"></i>
+            <div>
+              <p class="text-xs text-gray-600">PWM Pompa</p>
+              <p id="current-pwm-pump" class="text-xl font-bold text-purple-600">--</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <div class="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
-        <h2 class="text-xl font-semibold mb-4 text-gray-800">Grafik Real-Time</h2>
+      <!-- Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-xl shadow p-6">
+          <h3 class="text-lg font-semibold mb-4">Grafik Suhu</h3>
+          <div style="height: 300px">
+            <canvas id="chartTemp"></canvas>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6">
+          <h3 class="text-lg font-semibold mb-4">Grafik Kekeruhan</h3>
+          <div style="height: 300px">
+            <canvas id="chartTurb"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Performance Metrics -->
+      <div class="bg-white rounded-xl shadow p-6" id="live-metrics">
+        <h3 class="text-lg font-semibold mb-4 flex items-center">
+          <i data-lucide="bar-chart-3" class="w-5 h-5 mr-2"></i>
+          Live Performance Metrics
+        </h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Grafik Suhu -->
-          <div class="h-80">
-            <canvas id="chartSuhu"></canvas>
+          <!-- Temperature Metrics -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-semibold text-blue-600 mb-3">Temperature Control</h4>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-600">Overshoot:</span>
+                <span id="metric-temp-overshoot" class="font-semibold">--</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">Settling Time:</span>
+                <span id="metric-temp-settling" class="font-semibold">--</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">SSE:</span>
+                <span id="metric-temp-sse" class="font-semibold">--</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">Peak Value:</span>
+                <span id="metric-temp-peak" class="font-semibold">--</span>
+              </div>
+            </div>
           </div>
-          <!-- Grafik Kekeruhan -->
-          <div class="h-80">
-            <canvas id="chartKekeruhan"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <div class="lg:col-span-1 flex flex-col gap-6">
-
-        <div class="bg-white rounded-xl shadow-lg p-6">
-          <h2 class="text-xl font-semibold mb-5 text-gray-800">Setting Kontrol</h2>
-          <div class="grid grid-cols-1 gap-4">
-            <div>
-              <label class="block text-sm font-medium mb-1 text-gray-600">Mode Kontrol</label>
-              <select id="mode"
-                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-                <option value="Fuzzy">Fuzzy</option>
-                <option value="PID">PID</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1 text-gray-600">Setpoint Suhu (°C)</label>
-              <input type="number" step="0.1" id="setpoint" value="28.0"
-                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-            </div>
-
-            <div class="grid grid-cols-3 gap-3">
-              <div>
-                <label class="block text-sm font-medium mb-1 text-gray-600">Kp Suhu</label>
-                <input type="number" step="0.1" id="kp" value="25"
-                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+          <!-- Turbidity Metrics -->
+          <div class="border rounded-lg p-4">
+            <h4 class="font-semibold text-amber-600 mb-3">Turbidity Control</h4>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-600">Overshoot:</span>
+                <span id="metric-turb-overshoot" class="font-semibold">--</span>
               </div>
-              <div>
-                <label class="block text-sm font-medium mb-1 text-gray-600">Ki Suhu</label>
-                <input type="number" step="0.1" id="ki" value="1.5"
-                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              <div class="flex justify-between">
+                <span class="text-gray-600">Settling Time:</span>
+                <span id="metric-turb-settling" class="font-semibold">--</span>
               </div>
-              <div>
-                <label class="block text-sm font-medium mb-1 text-gray-600">Kd Suhu</label>
-                <input type="number" step="0.1" id="kd" value="4"
-                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              <div class="flex justify-between">
+                <span class="text-gray-600">SSE:</span>
+                <span id="metric-turb-sse" class="font-semibold">--</span>
               </div>
-            </div>
-            <div class="grid grid-cols-3 gap-3">
-              <div>
-                <label class="block text-sm font-medium mb-1 text-gray-600">Kp Keruh</label>
-                <input type="number" step="0.1" id="kp_keruh" value="10"
-                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+              <div class="flex justify-between">
+                <span class="text-gray-600">Peak Value:</span>
+                <span id="metric-turb-peak" class="font-semibold">--</span>
               </div>
-              <div>
-                <label class="block text-sm font-medium mb-1 text-gray-600">Ki Keruh</label>
-                <input type="number" step="0.1" id="ki_keruh" value="0.5"
-                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-              </div>
-              <div>
-                <label class="block text-sm font-medium mb-1 text-gray-600">Kd Keruh</label>
-                <input type="number" step="0.1" id="kd_keruh" value="1"
-                  class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1 text-gray-600">Setpoint Kekeruhan (%)</label>
-              <input type="number" step="0.1" id="keruh_setpoint" value="10.0"
-                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-            </div>
-
-            <div class="mt-2">
-              <button onclick="saveControl()"
-                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200">
-                <i data-lucide="save" class="w-5 h-5"></i>
-                <span>Simpan & Kirim ke ESP32</span>
-              </button>
             </div>
           </div>
         </div>
-
-        <div class="bg-white rounded-xl shadow-lg p-6">
-          <h2 class="text-xl font-semibold mb-5 text-gray-800">Export CSV</h2>
-          <div class="grid grid-cols-1 gap-4">
-            <div>
-              <label class="block text-sm font-medium mb-1 text-gray-600">Tanggal Awal</label>
-              <input type="datetime-local" id="start-date"
-                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1 text-gray-600">Tanggal Akhir</label>
-              <input type="datetime-local" id="end-date"
-                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-            </div>
-            <div class="mt-2">
-              <button onclick="exportCSV()"
-                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200">
-                <i data-lucide="download" class="w-5 h-5"></i>
-                <span>Export CSV</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
       </div>
 
     </div>
+
+    <!-- Experiments Tab -->
+    <div id="tab-experiments" class="tab-content hidden">
+
+      <!-- New Experiment Form -->
+      <div class="bg-white rounded-xl shadow p-6 mb-6">
+        <h3 class="text-lg font-semibold mb-4 flex items-center">
+          <i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i>
+          Start New Experiment
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-2">Control Mode</label>
+            <select id="exp-mode" class="w-full p-2 border rounded-lg">
+              <option value="Fuzzy">Fuzzy Logic</option>
+              <option value="PID">PID Controller</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Setpoint Suhu (°C)</label>
+            <input type="number" step="0.1" id="exp-temp-sp" value="28.0" class="w-full p-2 border rounded-lg">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Setpoint Kekeruhan (%)</label>
+            <input type="number" step="0.1" id="exp-turb-sp" value="10.0" class="w-full p-2 border rounded-lg">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Duration (minutes)</label>
+            <input type="number" id="exp-duration" value="10" class="w-full p-2 border rounded-lg">
+          </div>
+        </div>
+
+        <!-- PID Parameters (shown only when PID selected) -->
+        <div id="pid-params" class="mt-4 hidden">
+          <h4 class="font-medium mb-3">PID Parameters</h4>
+          <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div>
+              <label class="block text-xs mb-1">Kp Suhu</label>
+              <input type="number" step="0.1" id="exp-kp-temp" value="25" class="w-full p-2 border rounded text-sm">
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Ki Suhu</label>
+              <input type="number" step="0.1" id="exp-ki-temp" value="1.5" class="w-full p-2 border rounded text-sm">
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Kd Suhu</label>
+              <input type="number" step="0.1" id="exp-kd-temp" value="4" class="w-full p-2 border rounded text-sm">
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Kp Keruh</label>
+              <input type="number" step="0.1" id="exp-kp-turb" value="10" class="w-full p-2 border rounded text-sm">
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Ki Keruh</label>
+              <input type="number" step="0.1" id="exp-ki-turb" value="0.5" class="w-full p-2 border rounded text-sm">
+            </div>
+            <div>
+              <label class="block text-xs mb-1">Kd Keruh</label>
+              <input type="number" step="0.1" id="exp-kd-turb" value="1" class="w-full p-2 border rounded text-sm">
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <button onclick="startExperiment()"
+            class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2">
+            <i data-lucide="play" class="w-5 h-5"></i>
+            <span>Start Experiment</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Experiment List -->
+      <div class="bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-semibold mb-4">Recent Experiments</h3>
+        <div id="experiment-list" class="space-y-3">
+          <!-- Will be populated by JavaScript -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Analysis Tab -->
+    <div id="tab-analysis" class="tab-content hidden">
+      <div class="bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-semibold mb-4">Comparative Analysis</h3>
+        <p class="text-gray-600 mb-4">Select two experiments to compare their performance metrics.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-sm font-medium mb-2">Experiment 1</label>
+            <select id="compare-exp1" class="w-full p-2 border rounded-lg">
+              <option value="">-- Select --</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">Experiment 2</label>
+            <select id="compare-exp2" class="w-full p-2 border rounded-lg">
+              <option value="">-- Select --</option>
+            </select>
+          </div>
+        </div>
+
+        <button onclick="compareExperiments()"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">
+          Compare
+        </button>
+
+        <div id="comparison-results" class="mt-6">
+          <!-- Comparison results will be shown here -->
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="script.js"></script>
+  
+    <script>
+      lucide.createIcons();
+    </script>
 
-  <script>
-    lucide.createIcons();
-  </script>
+
 </body>
 
 </html>

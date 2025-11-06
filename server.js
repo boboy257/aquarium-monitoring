@@ -1,329 +1,576 @@
+// =========================================================================
+//                   models/ResearchData.js
+// =========================================================================
+const mongoose = require('mongoose');
+
+const researchDataSchema = new mongoose.Schema({
+  // Timing
+  timestamp: { type: Date, default: Date.now, index: true },
+  timestamp_ms: { type: Number }, // Milliseconds from ESP32
+  
+  // Sensor Readings
+  suhu: { type: Number, required: true },
+  turbidity_persen: { type: Number, required: true },
+  
+  // Control Info
+  kontrol_aktif: { type: String, enum: ['Fuzzy', 'PID'], required: true },
+  pwm_heater: { type: Number },
+  pwm_pompa: { type: Number },
+  
+  // Setpoints
+  setpoint_suhu: { type: Number },
+  setpoint_keruh: { type: Number },
+  
+  // Errors
+  error_suhu: { type: Number },
+  error_keruh: { type: Number },
+  
+  // PID Internals (only for PID mode)
+  pid_integral_suhu: { type: Number },
+  pid_integral_keruh: { type: Number },
+  
+  // Experiment Info
+  experiment_running: { type: Boolean, default: false },
+  experiment_id: { type: String, index: true },
+  experiment_elapsed_s: { type: Number }
+}, {
+  timestamps: true,
+  collection: 'research_data'
+});
+
+// Index for fast querying
+researchDataSchema.index({ experiment_id: 1, timestamp: 1 });
+researchDataSchema.index({ kontrol_aktif: 1, experiment_running: 1 });
+
+module.exports = mongoose.model('ResearchData', researchDataSchema);
+
+// =========================================================================
+//                   models/PerformanceMetrics.js
+// =========================================================================
+const metricsSchema = new mongoose.Schema({
+  // Experiment Info
+  experiment_id: { type: String, required: true, index: true },
+  kontrol_aktif: { type: String, enum: ['Fuzzy', 'PID'], required: true },
+  elapsed_s: { type: Number },
+  timestamp: { type: Date, default: Date.now },
+  
+  // Temperature Metrics
+  temperature: {
+    overshoot_percent: { type: Number },
+    settling_time_s: { type: Number },
+    steady_state_error: { type: Number },
+    peak_value: { type: Number },
+    peak_time_s: { type: Number },
+    settled: { type: Boolean, default: false }
+  },
+  
+  // Turbidity Metrics
+  turbidity: {
+    overshoot_percent: { type: Number },
+    settling_time_s: { type: Number },
+    steady_state_error: { type: Number },
+    peak_value: { type: Number },
+    peak_time_s: { type: Number },
+    settled: { type: Boolean, default: false }
+  }
+}, {
+  timestamps: true,
+  collection: 'performance_metrics'
+});
+
+metricsSchema.index({ experiment_id: 1, timestamp: -1 });
+
+const PerformanceMetrics = mongoose.model('PerformanceMetrics', metricsSchema);
+
+// =========================================================================
+//                   models/Experiment.js
+// =========================================================================
+const experimentSchema = new mongoose.Schema({
+  experiment_id: { type: String, required: true, unique: true },
+  control_mode: { type: String, enum: ['Fuzzy', 'PID'], required: true },
+  
+  // Configuration
+  config: {
+    suhu_setpoint: { type: Number, required: true },
+    keruh_setpoint: { type: Number, required: true },
+    duration_ms: { type: Number },
+    
+    // PID Parameters (if PID mode)
+    kp_suhu: Number,
+    ki_suhu: Number,
+    kd_suhu: Number,
+    kp_keruh: Number,
+    ki_keruh: Number,
+    kd_keruh: Number
+  },
+  
+  // Status
+  status: { 
+    type: String, 
+    enum: ['pending', 'running', 'completed', 'stopped'], 
+    default: 'pending' 
+  },
+  started_at: { type: Date },
+  completed_at: { type: Date },
+  
+  // Final Results (calculated after completion)
+  results: {
+    temperature: {
+      overshoot_percent: Number,
+      settling_time_s: Number,
+      steady_state_error: Number,
+      rise_time_s: Number,
+      peak_time_s: Number
+    },
+    turbidity: {
+      overshoot_percent: Number,
+      settling_time_s: Number,
+      steady_state_error: Number,
+      rise_time_s: Number,
+      peak_time_s: Number
+    },
+    data_points_count: { type: Number, default: 0 }
+  }
+}, {
+  timestamps: true,
+  collection: 'experiments'
+});
+
+const Experiment = mongoose.model('Experiment', experimentSchema);
+
+// =========================================================================
+//                   Enhanced server.js with Research Features
+// =========================================================================
 const express = require('express');
 const mongoose = require('mongoose');
 const mqtt = require('mqtt');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
-const Data = require('./models/Data');
-const Control = require('./models/Control'); // Pastikan model ini ada
+
+const ResearchData = require('./models/ResearchData');
+const PerformanceMetrics = require('./models/PerformanceMetrics');
+const Experiment = require('./models/Experiment');
+const Control = require('./models/Control');
+
+const CONFIG = {
+  PORT: process.env.PORT || 3000,
+  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/aquarium_research',
+  MQTT_BROKER: 'mqtt://broker.hivemq.com',
+  MQTT_TOPIC_DATA: 'unhas/informatika/aquarium/data',
+  MQTT_TOPIC_MODE: 'unhas/informatika/aquarium/mode',
+  MQTT_TOPIC_METRICS: 'unhas/informatika/aquarium/metrics'
+};
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
 
-// Serve static files dari folder frontend
-// Coba beberapa kemungkinan path untuk menemukan folder frontend
-let frontendPath;
-
-// Cek apakah berjalan di Render (dengan melihat environment variable RENDER atau path root)
-// Render menempatkan kode di /opt/render/project/src/
-if (__dirname.startsWith('/opt/render/project/src')) {
-  // Jika di Render, asumsikan root project adalah tempat server.js dijalankan
-  frontendPath = path.join(__dirname, 'frontend'); // -> /opt/render/project/src/frontend
-} else {
-  // Jika lokal, gunakan path relatif seperti sebelumnya
-  frontendPath = path.join(__dirname, '../frontend'); // -> ../frontend relatif ke backend/
-}
-
-console.log('Serving static files from:', frontendPath); // Log untuk debugging
-app.use(express.static(frontendPath));
-
-// CORS untuk frontend
+app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
-app.use(express.json());
+// Serve static files
+const frontendPath = __dirname.startsWith('/opt/render/project/src') ?
+  path.join(__dirname, 'frontend') :
+  path.join(__dirname, '../frontend');
+app.use(express.static(frontendPath));
 
-// MongoDB connection
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/aquarium';
-mongoose.connect(mongoUri, {
+// =========================================================================
+//                   DATABASE CONNECTION
+// =========================================================================
+mongoose.connect(CONFIG.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
+}).then(() => {
+  console.log('[MongoDB] Connected to research database');
+}).catch(err => {
+  console.error('[MongoDB] Connection error:', err);
+  process.exit(1);
 });
 
-// MQTT Client
-const client = mqtt.connect('mqtt://broker.hivemq.com');
-
-client.on('connect', () => {
-  console.log('Connected to MQTT broker');
-  client.subscribe('unhas/informatika/aquarium/data');
+// =========================================================================
+//                   MQTT CLIENT
+// =========================================================================
+const mqttClient = mqtt.connect(CONFIG.MQTT_BROKER, {
+  reconnectPeriod: 5000
 });
 
-client.on('message', async (topic, message) => {
-  if (topic === 'unhas/informatika/aquarium/data') {
+let lastDataTime = 0;
+const DEBOUNCE_MS = 500;
+
+mqttClient.on('connect', () => {
+  console.log('[MQTT] Connected');
+  mqttClient.subscribe([CONFIG.MQTT_TOPIC_DATA, CONFIG.MQTT_TOPIC_METRICS], { qos: 1 });
+});
+
+mqttClient.on('message', async (topic, message) => {
+  try {
     const data = JSON.parse(message.toString());
-    console.log('Payload diterima (dari ESP32):', data); // Debug log
-    await Data.create(data);
-    // Emit ke semua klien via socket
-    io.emit('newData', data);
-    console.log('Data dikirim ke socket:', data);
+    
+    if (topic === CONFIG.MQTT_TOPIC_DATA) {
+      const now = Date.now();
+      if (now - lastDataTime < DEBOUNCE_MS) return;
+      lastDataTime = now;
+      
+      await ResearchData.create(data);
+      io.emit('newData', data);
+      
+      // Update experiment data count
+      if (data.experiment_running && data.experiment_id) {
+        await Experiment.findOneAndUpdate(
+          { experiment_id: data.experiment_id },
+          { $inc: { 'results.data_points_count': 1 } }
+        );
+      }
+    }
+    
+    if (topic === CONFIG.MQTT_TOPIC_METRICS) {
+      await PerformanceMetrics.create(data);
+      io.emit('newMetrics', data);
+      
+      // Update experiment with latest metrics
+      if (data.experiment_id) {
+        await Experiment.findOneAndUpdate(
+          { experiment_id: data.experiment_id },
+          { 
+            $set: { 
+              'results.temperature': data.temperature,
+              'results.turbidity': data.turbidity
+            }
+          }
+        );
+      }
+    }
+  } catch (error) {
+    console.error('[MQTT] Processing error:', error.message);
   }
 });
 
-// API Routes
-app.get('/api/data', async (req, res) => {
-  const { start, end } = req.query;
-  let filter = {};
+// =========================================================================
+//                   API ROUTES - RESEARCH FOCUSED
+// =========================================================================
 
-  if (start && end) {
-    filter.timestamp = {
-      $gte: new Date(start),
-      $lte: new Date(end)
+// Start new experiment
+app.post('/api/experiment/start', async (req, res) => {
+  try {
+    const { control_mode, suhu_setpoint, keruh_setpoint, duration_ms, pid_params } = req.body;
+    
+    if (!['Fuzzy', 'PID'].includes(control_mode)) {
+      return res.status(400).json({ error: 'Invalid control mode' });
+    }
+    
+    const experiment_id = `${control_mode}_${Date.now()}`;
+    
+    // Create experiment record
+    const experiment = await Experiment.create({
+      experiment_id,
+      control_mode,
+      config: {
+        suhu_setpoint,
+        keruh_setpoint,
+        duration_ms: duration_ms || 600000,
+        ...(control_mode === 'PID' && pid_params)
+      },
+      status: 'running',
+      started_at: new Date()
+    });
+    
+    // Send command to ESP32
+    const command = {
+      experiment_start: true,
+      experiment_id,
+      duration: duration_ms || 600000,
+      kontrol_aktif: control_mode,
+      suhu_setpoint,
+      keruh_setpoint,
+      ...(control_mode === 'PID' && pid_params)
     };
+    
+    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, JSON.stringify(command));
+    
+    console.log('[EXPERIMENT] Started:', experiment_id);
+    res.json({ success: true, experiment });
+  } catch (error) {
+    console.error('[API] Start experiment error:', error);
+    res.status(500).json({ error: error.message });
   }
+});
 
-  const data = await Data.find(filter).sort({ timestamp: -1 }).limit(100);
-  res.json(data);
+// Stop experiment
+app.post('/api/experiment/stop/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await Experiment.findOneAndUpdate(
+      { experiment_id: id },
+      { status: 'stopped', completed_at: new Date() }
+    );
+    
+    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, JSON.stringify({
+      experiment_stop: true,
+      experiment_id: id
+    }));
+    
+    console.log('[EXPERIMENT] Stopped:', id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get experiment list
+app.get('/api/experiments', async (req, res) => {
+  try {
+    const { control_mode, status } = req.query;
+    const filter = {};
+    if (control_mode) filter.control_mode = control_mode;
+    if (status) filter.status = status;
+    
+    const experiments = await Experiment.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(50);
+    
+    res.json(experiments);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get experiment details with data
+app.get('/api/experiment/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const experiment = await Experiment.findOne({ experiment_id: id });
+    if (!experiment) {
+      return res.status(404).json({ error: 'Experiment not found' });
+    }
+    
+    const data = await ResearchData.find({ experiment_id: id })
+      .sort({ timestamp: 1 })
+      .lean();
+    
+    const metrics = await PerformanceMetrics.find({ experiment_id: id })
+      .sort({ timestamp: -1 })
+      .limit(1)
+      .lean();
+    
+    res.json({
+      experiment,
+      data,
+      latest_metrics: metrics[0] || null
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Export experiment data as CSV
+app.get('/api/experiment/:id/export', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const experiment = await Experiment.findOne({ experiment_id: id });
+    if (!experiment) {
+      return res.status(404).json({ error: 'Experiment not found' });
+    }
+    
+    const data = await ResearchData.find({ experiment_id: id })
+      .sort({ timestamp: 1 })
+      .lean();
+    
+    if (data.length === 0) {
+      return res.status(404).json({ error: 'No data found' });
+    }
+    
+    // CSV Header
+    let csv = 'Timestamp,Timestamp_MS,Elapsed_S,Control_Mode,';
+    csv += 'Temp_Actual,Temp_Setpoint,Temp_Error,PWM_Heater,';
+    csv += 'Turb_Actual,Turb_Setpoint,Turb_Error,PWM_Pump,';
+    csv += 'PID_Integral_Temp,PID_Integral_Turb\n';
+    
+    // CSV Data
+    data.forEach(row => {
+      csv += `"${row.timestamp.toISOString()}",`;
+      csv += `${row.timestamp_ms || 0},`;
+      csv += `${row.experiment_elapsed_s || 0},`;
+      csv += `"${row.kontrol_aktif}",`;
+      csv += `${row.suhu || 0},`;
+      csv += `${row.setpoint_suhu || 0},`;
+      csv += `${row.error_suhu || 0},`;
+      csv += `${row.pwm_heater || 0},`;
+      csv += `${row.turbidity_persen || 0},`;
+      csv += `${row.setpoint_keruh || 0},`;
+      csv += `${row.error_keruh || 0},`;
+      csv += `${row.pwm_pompa || 0},`;
+      csv += `${row.pid_integral_suhu || 0},`;
+      csv += `${row.pid_integral_keruh || 0}\n`;
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="experiment_${id}.csv"`);
+    res.send('\uFEFF' + csv);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Compare two experiments
+app.get('/api/compare/:id1/:id2', async (req, res) => {
+  try {
+    const { id1, id2 } = req.params;
+    
+    const [exp1, exp2] = await Promise.all([
+      Experiment.findOne({ experiment_id: id1 }),
+      Experiment.findOne({ experiment_id: id2 })
+    ]);
+    
+    if (!exp1 || !exp2) {
+      return res.status(404).json({ error: 'One or both experiments not found' });
+    }
+    
+    const [data1, data2] = await Promise.all([
+      ResearchData.find({ experiment_id: id1 }).sort({ timestamp: 1 }).lean(),
+      ResearchData.find({ experiment_id: id2 }).sort({ timestamp: 1 }).lean()
+    ]);
+    
+    res.json({
+      experiment1: { info: exp1, data: data1 },
+      experiment2: { info: exp2, data: data2 }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Calculate statistics for experiment
+app.get('/api/experiment/:id/statistics', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const data = await ResearchData.find({ experiment_id: id })
+      .sort({ timestamp: 1 })
+      .lean();
+    
+    if (data.length === 0) {
+      return res.status(404).json({ error: 'No data found' });
+    }
+    
+    // Calculate statistics
+    const tempErrors = data.map(d => Math.abs(d.error_suhu || 0));
+    const turbErrors = data.map(d => Math.abs(d.error_keruh || 0));
+    
+    const stats = {
+      temperature: {
+        mean_error: tempErrors.reduce((a,b) => a+b, 0) / tempErrors.length,
+        max_error: Math.max(...tempErrors),
+        min_error: Math.min(...tempErrors),
+        std_dev: calculateStdDev(tempErrors)
+      },
+      turbidity: {
+        mean_error: turbErrors.reduce((a,b) => a+b, 0) / turbErrors.length,
+        max_error: Math.max(...turbErrors),
+        min_error: Math.min(...turbErrors),
+        std_dev: calculateStdDev(turbErrors)
+      },
+      total_data_points: data.length
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+function calculateStdDev(values) {
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+// Legacy routes for compatibility
+app.get('/api/data', async (req, res) => {
+  try {
+    const { start, end, limit = 100 } = req.query;
+    let filter = {};
+    
+    if (start && end) {
+      filter.timestamp = {
+        $gte: new Date(start),
+        $lte: new Date(end)
+      };
+    }
+    
+    const data = await ResearchData.find(filter)
+      .sort({ timestamp: -1 })
+      .limit(parseInt(limit))
+      .lean();
+    
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/api/control', async (req, res) => {
-  const control = await Control.findOne();
-  // Kembalikan nilai default jika tidak ditemukan
-  res.json(control || {
-    kontrol_aktif: "Fuzzy",
-    suhu_setpoint: 28.0,
-    kp_suhu: 25,
-    ki_suhu: 1.5,
-    kd_suhu: 4,
-    keruh_setpoint: 10.0,
-    kp_keruh: 10,
-    ki_keruh: 0.5,
-    kd_keruh: 1
-  });
+  try {
+    const control = await Control.findOne().lean();
+    res.json(control || {
+      kontrol_aktif: "Fuzzy",
+      suhu_setpoint: 28.0,
+      kp_suhu: 25,
+      ki_suhu: 1.5,
+      kd_suhu: 4,
+      keruh_setpoint: 10.0,
+      kp_keruh: 10,
+      ki_keruh: 0.5,
+      kd_keruh: 1
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.post('/api/control', async (req, res) => {
-  // Ambil semua parameter dari body frontend
-  const { kontrol_aktif, suhu_setpoint, kp_suhu, ki_suhu, kd_suhu, keruh_setpoint, kp_keruh, ki_keruh, kd_keruh } = req.body;
-
-  // Validasi sederhana (opsional)
-  if (!['Fuzzy', 'PID'].includes(kontrol_aktif)) {
-    return res.status(400).json({ error: 'kontrol_aktif harus Fuzzy atau PID' });
+  try {
+    const updated = await Control.findOneAndUpdate(
+      {},
+      req.body,
+      { upsert: true, new: true }
+    );
+    
+    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, JSON.stringify(req.body));
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  if (typeof suhu_setpoint !== 'number' || typeof kp_suhu !== 'number' || typeof ki_suhu !== 'number' || typeof kd_suhu !== 'number' ||
-      typeof keruh_setpoint !== 'number' || typeof kp_keruh !== 'number' || typeof ki_keruh !== 'number' || typeof kd_keruh !== 'number') {
-    return res.status(400).json({ error: 'Parameter kontrol harus berupa angka' });
-  }
-
-  // Simpan ke database (gunakan nama field yang sesuai)
-  const updatedControl = await Control.findOneAndUpdate(
-    {},
-    { kontrol_aktif, suhu_setpoint, kp_suhu, ki_suhu, kd_suhu, keruh_setpoint, kp_keruh, ki_keruh, kd_keruh },
-    { upsert: true, new: true } // upsert: buat jika tidak ada, new: kembalikan dokumen baru
-  );
-
-  // --- KIRIM SEMUA PARAMETER KE ESP32 MELALUI MQTT ---
-  const controlPayload = {
-    kontrol_aktif: updatedControl.kontrol_aktif,
-    suhu_setpoint: updatedControl.suhu_setpoint,
-    kp_suhu: updatedControl.kp_suhu,
-    ki_suhu: updatedControl.ki_suhu,
-    kd_suhu: updatedControl.kd_suhu,
-    keruh_setpoint: updatedControl.keruh_setpoint,
-    kp_keruh: updatedControl.kp_keruh,
-    ki_keruh: updatedControl.ki_keruh,
-    kd_keruh: updatedControl.kd_keruh
-  };
-
-  client.publish('unhas/informatika/aquarium/mode', JSON.stringify(controlPayload));
-  console.log('Control payload dikirim ke ESP32 via MQTT:', controlPayload);
-  // --- END OF MQTT SEND ---
-
-  res.json({ message: 'Control updated and sent to ESP32', data: updatedControl });
 });
 
-// API untuk export ke CSV (diperbarui untuk mencakup data dari dua loop kontrol)
-app.get('/api/export', async (req, res) => {
-  const { start, end } = req.query;
-  let filter = {};
-
-  // --- MODIFIKASI DIMULAI ---
-  if (start && end) {
-    let startDateObj = new Date(start);
-    let endDateObj = new Date(end);
-
-    // Cek apakah parsing berhasil
-    if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
-      console.error('Invalid date format received for export:', start, end);
-      return res.status(400).json({ message: 'Invalid date format' });
-    }
-
-    // Fungsi bantuan untuk konversi WITA ke UTC (dalam objek Date)
-    function witaToUtcDate(witaString) {
-      // witaString format: 'YYYY-MM-DDTHH:mm' (local browser time, dianggap WITA)
-      const localDate = new Date(witaString);
-      if (isNaN(localDate.getTime())) {
-        throw new Error('Invalid date string');
-      }
-      // Ambil offset WITA dalam menit (8 jam = 8 * 60 menit)
-      const witaOffsetMinutes = 8 * 60;
-      const localTimeMs = localDate.getTime();
-      const utcTimeMsForWita = localTimeMs - (witaOffsetMinutes * 60000); // 60000 ms per minute
-      return new Date(utcTimeMsForWita);
-    }
-
-    try {
-        startDateObj = witaToUtcDate(start);
-        endDateObj = witaToUtcDate(end);
-    } catch (e) {
-        console.error('Error parsing date for export (WITA assumed):', e.message);
-        return res.status(400).json({ message: 'Invalid date format, must be compatible with WITA (YYYY-MM-DDTHH:mm)' });
-    }
-
-    filter.timestamp = {
-      $gte: startDateObj,
-      $lte: endDateObj
-    };
-  }
-  // --- MODIFIKASI BERAKHIR ---
-
-  console.log('Export filter:', filter); // Log filter untuk debugging
-
-  const data = await Data.find(filter).sort({ timestamp: 1 });
-
-  console.log('Data found for export:', data.length); // Log jumlah data
-
-  if (data.length === 0) {
-    console.log('No data found in DB for export with filter:', filter); // Log tambahan
-    return res.status(404).json({ message: 'No data found for the selected date range' });
-  }
-
-  // Header CSV diperbarui: Gunakan field baru
-  let csv = 'Timestamp,Suhu,Kontrol Aktif,PWM Heater,PWM Pompa,Turbidity Persen\n'; // Urutan: Timestamp, Suhu, Kontrol, PWM Heater, PWM Pompa, Turbidity Persen
-  data.forEach(item => {
-    // Konversi ke waktu lokal WITA (GMT+8)
-    const witaTime = new Date(item.timestamp.getTime() + 8 * 3600000); // Tambah 8 jam
-
-    // Format waktu dalam format ISO (dikenal Excel)
-    const formattedTime = witaTime.toISOString().replace('T', ' ').substring(0, 19);
-
-    // Urutan data harus sesuai header: Timestamp, Suhu, Kontrol Aktif, PWM Heater, PWM Pompa, Turbidity Persen
-    // Gunakan field-field baru dari payload MQTT
-    csv += `"${formattedTime}","${item.suhu}","${item.kontrol_aktif}","${item.pwm_heater}","${item.pwm_pompa}","${item.turbidity_persen}"\n`;
-  });
-
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="aquarium_data_wita.csv"');
-  res.send(csv);
-});
-
-// Serve index.html jika request ke root
 app.get('/', (req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
-// =============================
-// Fungsi untuk dapatkan IP lokal
-function getLocalIP() {
-  const os = require('os');
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return 'localhost';
-}
-
-// Route untuk tampilkan QR Code dan IP
-app.get('/info', (req, res) => {
-  const localIP = getLocalIP();
-  const url = `http://${localIP}:3000`;
-
-  const html = `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <title>Info Akses Dashboard</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        text-align: center;
-        padding: 50px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-      }
-      .container {
-        background: rgba(255,255,255,0.1);
-        padding: 30px;
-        border-radius: 15px;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-      }
-      h1 { margin-bottom: 30px; }
-      .qr-code {
-        margin: 20px 0;
-        padding: 20px;
-        background: white;
-        display: inline-block;
-        border-radius: 10px;
-      }
-      .url {
-        background: rgba(255,255,255,0.2);
-        padding: 15px;
-        border-radius: 8px;
-        margin: 20px 0;
-        word-break: break-all;
-      }
-      .btn {
-        background: #4CAF50;
-        color: white;
-        padding: 12px 24px;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 16px;
-        margin: 10px;
-      }
-      .btn:hover { background: #45a049; }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>🔗 Akses Dashboard Aquarium</h1>
-
-      <div class="qr-code">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}" alt="QR Code">
-      </div>
-
-      <div class="url">
-        <strong>🌐 URL untuk akses:</strong><br>
-        <code>${url}</code>
-      </div>
-
-      <p>📱 Scan QR Code di atas atau ketik URL di browser HP kamu</p>
-
-      <button class="btn" onclick="location.reload()">🔄 Refresh IP</button>
-      <button class="btn" onclick="window.open('${url}')">🚀 Buka Dashboard</button>
-
-      <p style="margin-top: 30px; font-size: 14px;">
-        Pastikan HP dan komputer terhubung ke WiFi yang sama
-      </p>
-    </div>
-  </body>
-  </html>
-  `;
-
-  res.send(html);
-});
-
-// =============================
-server.listen(3000, '0.0.0.0', () => {
-  const localIP = getLocalIP();
+// =========================================================================
+//                   SERVER START
+// =========================================================================
+server.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║                    🐠 AQUARIUM CONTROL                   ║
+║           🔬 AQUARIUM RESEARCH SYSTEM                    ║
 ╠══════════════════════════════════════════════════════════╣
-║ 🖥️  Local:    http://localhost:3000                    ║
-║ 🌐 Network:   http://${localIP}:3000                   ║
-║ 🔗 Info Page: http://${localIP}:3000/info              ║
+║ 🌐 Server:    http://localhost:${CONFIG.PORT}           
+║ 📊 Database:  ${CONFIG.MONGODB_URI}
+║ 🔌 MQTT:      ${CONFIG.MQTT_BROKER}
 ╚══════════════════════════════════════════════════════════╝
   `);
 });
+
+module.exports = { app, server, mqttClient };
