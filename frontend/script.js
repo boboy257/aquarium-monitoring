@@ -234,23 +234,36 @@ function initCharts() {
             display: true, 
             position: 'top', 
             labels: { font: { size: 12, weight: '600' } },
-            // Tambahkan fungsi onClick untuk toggle dataset
+            // Perbaikan fungsi onClick untuk toggle dataset
             onClick: function(e, legendItem, legend) {
               const index = legendItem.datasetIndex;
               const ci = legend.chart;
-              if (ci.isDatasetVisible(index)) {
-                ci.hide(index);
-              } else {
-                ci.show(index);
+              // Tambahkan pengecekan untuk menghindari error
+              if (index !== undefined && ci && typeof ci.isDatasetVisible === 'function' && typeof ci.hide === 'function' && typeof ci.show === 'function') {
+                if (ci.isDatasetVisible(index)) {
+                  ci.hide(index);
+                } else {
+                  ci.show(index);
+                }
               }
-              // Toggle checkbox internal
-              legend.chart.options.plugins.legend.labels[index].hidden = !ci.isDatasetVisible(index);
+              // Jangan akses legend.chart.options.plugins.legend.labels[index].hidden
+              // Chart.js otomatis mengelola status visible/hidden internal-nya
             }
           },
           tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', titleFont: { size: 13 }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 8 }
         },
         scales: {
-          y: { min: 20, max: 40, grid: { color: 'rgba(0, 0, 0, 0.05)' }, title: { display: true, text: 'Temperature (°C)', font: { size: 13, weight: '600' } } },
+          y: { 
+            min: 20, 
+            max: 40, // <-- Sudah diganti dari 35 menjadi 40
+            grid: { color: 'rgba(0, 0, 0, 0.05)' }, 
+            title: { 
+              display: true, 
+              text: 'Temperature (°C)', 
+              font: { size: 13, weight: '600' } 
+            }
+            // Tidak perlu tambahkan ticks.stepSize untuk suhu karena kamu ingin default
+          },
           x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0 } }
         },
         animation: { duration: 0 }
@@ -295,23 +308,39 @@ function initCharts() {
             display: true, 
             position: 'top', 
             labels: { font: { size: 12, weight: '600' } },
-            // Tambahkan fungsi onClick untuk toggle dataset
+            // Perbaikan fungsi onClick untuk toggle dataset
             onClick: function(e, legendItem, legend) {
               const index = legendItem.datasetIndex;
               const ci = legend.chart;
-              if (ci.isDatasetVisible(index)) {
-                ci.hide(index);
-              } else {
-                ci.show(index);
+              // Tambahkan pengecekan untuk menghindari error
+              if (index !== undefined && ci && typeof ci.isDatasetVisible === 'function' && typeof ci.hide === 'function' && typeof ci.show === 'function') {
+                if (ci.isDatasetVisible(index)) {
+                  ci.hide(index);
+                } else {
+                  ci.show(index);
+                }
               }
-              // Toggle checkbox internal
-              legend.chart.options.plugins.legend.labels[index].hidden = !ci.isDatasetVisible(index);
+              // Jangan akses legend.chart.options.plugins.legend.labels[index].hidden
+              // Chart.js otomatis mengelola status visible/hidden internal-nya
             }
           },
           tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', titleFont: { size: 13 }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 8 }
         },
         scales: {
-          y: { min: 0, max: 100, grid: { color: 'rgba(0, 0, 0, 0.05)' }, title: { display: true, text: 'Turbidity (%)', font: { size: 13, weight: '600' } } },
+          y: { 
+            min: 0, 
+            max: 100, 
+            grid: { color: 'rgba(0, 0, 0, 0.05)' }, 
+            title: { 
+              display: true, 
+              text: 'Turbidity (%)', 
+              font: { size: 13, weight: '600' } 
+            },
+            // Tambahkan baris ini untuk mengatur interval ticks menjadi 5
+            ticks: {
+              stepSize: 5
+            }
+          },
           x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0 } }
         },
         animation: { duration: 0 }
