@@ -7,6 +7,8 @@ let socket = null;
 let dataBuffer = [];
 let currentExperimentId = null;
 let isConnected = false;
+let currentTempSetpoint = 28.0; // Default value
+let currentTurbSetpoint = 10.0; // Default value
 
 const API_BASE = window.location.origin;
 
@@ -199,17 +201,56 @@ function initCharts() {
   if (ctxTemp) {
     chartTemp = new Chart(ctxTemp.getContext('2d'), {
       type: 'line',
-      data: { labels: [], datasets: [{ label: 'Temperature (°C)', data: [], borderColor: 'rgb(59, 130, 246)', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5 }] },
+      data: { labels: [], datasets: [
+        { 
+          label: 'Temperature (°C)',
+          data: [],
+          borderColor: 'rgb(59, 130, 246)',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2,
+          tension: 0.4,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          yAxisID: 'y'
+        },
+        { 
+          // Dataset setpoint suhu - inisialisasi kosong
+          label: 'Setpoint Suhu',
+          data: [],
+          borderColor: 'rgba(255, 0, 0, 1)', // Merah
+          borderDash: [5, 5], // Garis putus-putus
+          fill: false,
+          pointRadius: 0, // Tidak ada titik
+          yAxisID: 'y',
+          hidden: true // Sembunyikan dulu
+        }
+      ]},
       options: {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { display: true, position: 'top', labels: { font: { size: 12, weight: '600' } } },
+          legend: { 
+            display: true, 
+            position: 'top', 
+            labels: { font: { size: 12, weight: '600' } },
+            // Tambahkan fungsi onClick untuk toggle dataset
+            onClick: function(e, legendItem, legend) {
+              const index = legendItem.datasetIndex;
+              const ci = legend.chart;
+              if (ci.isDatasetVisible(index)) {
+                ci.hide(index);
+              } else {
+                ci.show(index);
+              }
+              // Toggle checkbox internal
+              legend.chart.options.plugins.legend.labels[index].hidden = !ci.isDatasetVisible(index);
+            }
+          },
           tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', titleFont: { size: 13 }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 8 }
         },
         scales: {
-          y: { min: 20, max: 35, grid: { color: 'rgba(0, 0, 0, 0.05)' }, title: { display: true, text: 'Temperature (°C)', font: { size: 13, weight: '600' } } },
+          y: { min: 20, max: 40, grid: { color: 'rgba(0, 0, 0, 0.05)' }, title: { display: true, text: 'Temperature (°C)', font: { size: 13, weight: '600' } } },
           x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 0 } }
         },
         animation: { duration: 0 }
@@ -221,13 +262,52 @@ function initCharts() {
   if (ctxTurb) {
     chartTurb = new Chart(ctxTurb.getContext('2d'), {
       type: 'line',
-      data: { labels: [], datasets: [{ label: 'Turbidity (%)', data: [], borderColor: 'rgb(245, 158, 11)', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5 }] },
+      data: { labels: [], datasets: [
+        { 
+          label: 'Turbidity (%)',
+          data: [],
+          borderColor: 'rgb(245, 158, 11)',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderWidth: 2,
+          tension: 0.4,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          yAxisID: 'y'
+        },
+        { 
+          // Dataset setpoint kekeruhan - inisialisasi kosong
+          label: 'Setpoint Kekeruhan',
+          data: [],
+          borderColor: 'rgba(255, 0, 0, 1)', // Merah
+          borderDash: [5, 5], // Garis putus-putus
+          fill: false,
+          pointRadius: 0, // Tidak ada titik
+          yAxisID: 'y',
+          hidden: true // Sembunyikan dulu
+        }
+      ]},
       options: {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { display: true, position: 'top', labels: { font: { size: 12, weight: '600' } } },
+          legend: { 
+            display: true, 
+            position: 'top', 
+            labels: { font: { size: 12, weight: '600' } },
+            // Tambahkan fungsi onClick untuk toggle dataset
+            onClick: function(e, legendItem, legend) {
+              const index = legendItem.datasetIndex;
+              const ci = legend.chart;
+              if (ci.isDatasetVisible(index)) {
+                ci.hide(index);
+              } else {
+                ci.show(index);
+              }
+              // Toggle checkbox internal
+              legend.chart.options.plugins.legend.labels[index].hidden = !ci.isDatasetVisible(index);
+            }
+          },
           tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', titleFont: { size: 13 }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 8 }
         },
         scales: {
@@ -248,13 +328,19 @@ function updateCharts() {
   const labels = dataBuffer.map(d => d.time);
   const tempData = dataBuffer.map(d => d.temp);
   const turbData = dataBuffer.map(d => d.turb);
-
+  
+  // Update chart suhu
   chartTemp.data.labels = labels;
-  chartTemp.data.datasets[0].data = tempData;
+  chartTemp.data.datasets[0].data = tempData; // Dataset 0 = suhu aktual
+  // Update data setpoint (dataset 1), tetap dengan panjang yang sama
+  chartTemp.data.datasets[1].data = Array(tempData.length).fill(currentTempSetpoint);
   chartTemp.update('none');
 
+  // Update chart kekeruhan
   chartTurb.data.labels = labels;
-  chartTurb.data.datasets[0].data = turbData;
+  chartTurb.data.datasets[0].data = turbData; // Dataset 0 = kekeruhan aktual
+  // Update data setpoint (dataset 1), tetap dengan panjang yang sama
+  chartTurb.data.datasets[1].data = Array(turbData.length).fill(currentTurbSetpoint);
   chartTurb.update('none');
 }
 
@@ -270,6 +356,10 @@ async function updateControl() {
     showNotification('Please enter valid numbers', 'error');
     return;
   }
+
+  // Simpan nilai setpoint terbaru
+  currentTempSetpoint = tempSp;
+  currentTurbSetpoint = turbSp;
 
   const payload = { kontrol_aktif: mode, suhu_setpoint: tempSp, keruh_setpoint: turbSp };
 
@@ -306,6 +396,9 @@ async function loadControlSettings() {
     document.getElementById('control-mode').value = control.kontrol_aktif || 'Fuzzy';
     document.getElementById('control-temp-sp').value = control.suhu_setpoint || 28.0;
     document.getElementById('control-turb-sp').value = control.keruh_setpoint || 10.0;
+    // Simpan nilai setpoint terbaru
+    currentTempSetpoint = control.suhu_setpoint || 28.0;
+    currentTurbSetpoint = control.keruh_setpoint || 10.0;
   } catch (error) {
     console.error('[Control] Load error:', error);
   }
