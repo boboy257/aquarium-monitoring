@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Data = require('./models/Data'); // Sesuaikan path
 
-mongoose.connect('mongodb://localhost:27017/aquarium', {
+mongoose.connect('mongodb://localhost:27017/aquarium_research', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 });

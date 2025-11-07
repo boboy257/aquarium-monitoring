@@ -23,8 +23,8 @@ const researchDataSchema = new mongoose.Schema({
   error_keruh: { type: Number },
   
   // PID Internals
-  pid_integral_suhu: { type: Number },
-  pid_integral_keruh: { type: Number },
+  //pid_integral_suhu: { type: Number },
+ // pid_integral_keruh: { type: Number },
   
   // Experiment Info
   experiment_running: { type: Boolean, default: false },
@@ -32,7 +32,9 @@ const researchDataSchema = new mongoose.Schema({
   experiment_elapsed_s: { type: Number }
 }, {
   timestamps: true,
-  collection: 'research_data'
+  collection: 'research_data',
+  strict: false,
+   strictQuery: false
 });
 
 // Indexes

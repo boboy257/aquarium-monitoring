@@ -137,7 +137,10 @@ function connectSocket() {
     showNotification('Reconnected to server', 'success');
   });
 
-  socket.on('newData', (data) => updateDashboard(data));
+  socket.on('newData', (data) => {
+    //console.log('[DEBUG] Received new data:', data);
+    updateDashboard(data); // <-- Ini harus update semua nilai, termasuk mode
+  });
   socket.on('newMetrics', (metrics) => updateMetricsDisplay(metrics));
 }
 
@@ -145,6 +148,12 @@ function connectSocket() {
 //                   DASHBOARD UPDATES
 // =========================================================================
 function updateDashboard(data) {
+
+  if (!data) {
+    console.error('[ERROR] Received null data');
+    return;
+  }
+
   document.getElementById('current-temp').textContent = `${formatNumber(data.suhu)}°C`;
   document.getElementById('current-turb').textContent = `${formatNumber(data.turbidity_persen)}%`;
   document.getElementById('current-mode').textContent = data.kontrol_aktif || '--';
@@ -263,6 +272,16 @@ async function updateControl() {
   }
 
   const payload = { kontrol_aktif: mode, suhu_setpoint: tempSp, keruh_setpoint: turbSp };
+
+  // Tambahkan PID parameters jika mode PID
+  if (mode === 'PID') {
+    payload.kp_suhu = parseFloat(document.getElementById('control-kp-temp').value);
+    payload.ki_suhu = parseFloat(document.getElementById('control-ki-temp').value);
+    payload.kd_suhu = parseFloat(document.getElementById('control-kd-temp').value);
+    payload.kp_keruh = parseFloat(document.getElementById('control-kp-turb').value);
+    payload.ki_keruh = parseFloat(document.getElementById('control-ki-turb').value);
+    payload.kd_keruh = parseFloat(document.getElementById('control-kd-turb').value);
+  }
 
   try {
     const res = await fetch(`${API_BASE}/api/control`, {
@@ -548,7 +567,10 @@ document.addEventListener('DOMContentLoaded', () => {
   lucide.createIcons();
   console.log('[App] ✅ Ready');
 });
-
+ document.getElementById('control-mode').addEventListener('change', (e) => {
+    const pidParams = document.getElementById('pid-params-control');
+    pidParams.classList.toggle('hidden', e.target.value !== 'PID');
+  });
 document.getElementById('exp-mode').addEventListener('change', (e) => {
   const pidParams = document.getElementById('pid-params');
   pidParams.classList.toggle('hidden', e.target.value !== 'PID');

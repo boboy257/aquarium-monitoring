@@ -25,7 +25,8 @@ const metricsSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true,
-  collection: 'performance_metrics'
+  collection: 'performance_metrics',
+  strict: false
 });
 
 metricsSchema.index({ experiment_id: 1, timestamp: -1 });

@@ -69,7 +69,7 @@ const mqttClient = mqtt.connect(CONFIG.MQTT_BROKER, {
   keepalive: 60
 });
 
-let lastDataTime = 0;
+// Hapus variabel lastDataTime karena kita hapus debounce
 
 mqttClient.on('connect', () => {
   console.log('[MQTT] ✅ Connected to broker');
@@ -85,20 +85,48 @@ mqttClient.on('connect', () => {
   });
 });
 
+// Tambahkan event listener untuk debugging
+mqttClient.on('disconnect', (reason) => {
+  console.error('[MQTT] ❌ DISCONNECTED:', reason);
+});
+
+mqttClient.on('reconnect', () => {
+  console.log('[MQTT] 🔄 Reconnecting...');
+});
+
+mqttClient.on('close', () => {
+  console.error('[MQTT] ❌ CONNECTION CLOSED');
+});
+
+mqttClient.on('offline', () => {
+  console.error('[MQTT] ❌ OFFLINE');
+});
+
 mqttClient.on('message', async (topic, message) => {
   try {
     const data = JSON.parse(message.toString());
     
     if (topic === CONFIG.MQTT_TOPIC_DATA) {
-      const now = Date.now();
-      if (now - lastDataTime < 500) return; // Debounce 500ms
-      lastDataTime = now;
+      // HAPUS DEBOUNCE KARENA MENYEBABKAN STUCK
       
       // Save to database
-      const savedData = await ResearchData.create(data);
+      console.log('[DEBUG] Raw MQTT Data:', data);
+      let savedData = null;
+      try {
+        const savedData = await ResearchData.create(data);
+        if (savedData) { // Pastikan savedData tidak null
+          io.emit('newData', savedData);
+        }
+        console.log('[DEBUG] Data saved successfully:', savedData._id);
+      } catch (dbError) {
+        console.error('[MongoDB] Error saving data:', dbError.message);
+        console.error('[MongoDB] Problematic data:', data);
+        // JANGAN BREAK LOOP, lanjutkan proses
+        return; // Hanya skip data ini, jangan break MQTT loop
+      }
       
       // Emit via Socket.IO
-      io.emit('newData', savedData);
+      //io.emit('newData', savedData);
       
       // Update experiment count
       if (data.experiment_running && data.experiment_id) {
@@ -132,15 +160,13 @@ mqttClient.on('message', async (topic, message) => {
     }
   } catch (error) {
     console.error('[MQTT] Processing error:', error.message);
+    // JANGAN BREAK LOOP MQTT KARENA ERROR
+    // Biarkan fungsi selesai normal agar data berikutnya bisa diproses
   }
 });
 
 mqttClient.on('error', (error) => {
   console.error('[MQTT] ❌ Error:', error.message);
-});
-
-mqttClient.on('reconnect', () => {
-  console.log('[MQTT] 🔄 Reconnecting...');
 });
 
 // =========================================================================
@@ -205,14 +231,18 @@ app.post('/api/control', async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     
+    console.log('[API] Control updated in DB, now publishing to MQTT...'); // LOG TAMBAHAN
+    
     // Publish to MQTT
     const payload = JSON.stringify(req.body);
     mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, payload, { qos: 1 }, (err) => {
+      console.log('[MQTT] Publish callback started'); // LOG TAMBAHAN
       if (err) {
         console.error('[MQTT] Publish error:', err);
         return res.status(500).json({ error: 'MQTT publish failed' });
       }
       console.log('[MQTT] ✅ Control sent to ESP32:', payload);
+      console.log('[API] Sending success response to frontend'); // LOG TAMBAHAN
       res.json({ success: true, data: updated });
     });
   } catch (error) {
@@ -288,10 +318,13 @@ app.post('/api/experiment/stop/:id', async (req, res) => {
       experiment_id: id
     };
     
-    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, JSON.stringify(command), { qos: 1 });
-    
-    console.log('[API] Experiment stopped:', id);
-    res.json({ success: true });
+    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, JSON.stringify(command), { qos: 1 }, (err) => {
+      if (err) {
+        console.error('[MQTT] Publish error (stop):', err);
+      }
+      console.log('[API] Experiment stopped:', id);
+      res.json({ success: true });
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

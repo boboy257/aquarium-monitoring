@@ -44,7 +44,8 @@ const experimentSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true,
-  collection: 'experiments'
+  collection: 'experiments',
+  strict: false
 });
 
 module.exports = mongoose.model('Experiment', experimentSchema);
