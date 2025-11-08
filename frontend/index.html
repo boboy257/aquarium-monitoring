@@ -6,20 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Aquarium Research Dashboard</title>
 
-  <!-- Tailwind CSS (CDN Prebuilt for Dev) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-  <!-- External Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
-  <script src="https://unpkg.com/lucide@0.423.0"></script>>
+  <script src="https://unpkg.com/lucide@0.423.0"></script>
 
   <style>
+    /* CSS Anda dari sebelumnya, tidak perlu diubah */
     * {
       margin: 0;
       padding: 0;
@@ -29,75 +27,6 @@
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background-color: #f8fafc;
-    }
-
-    .experiment-card {
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      cursor: pointer;
-    }
-
-    .experiment-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
-    }
-
-    .metric-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .status-running {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: white;
-    }
-
-    .status-completed {
-      background: linear-gradient(135deg, #6b7280, #4b5563);
-      color: white;
-    }
-
-    .status-stopped {
-      background: linear-gradient(135deg, #ef4444, #dc2626);
-      color: white;
-    }
-
-    .status-pending {
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: white;
-    }
-
-    .tab-button {
-      position: relative;
-      padding: 0.75rem 1.5rem;
-      font-weight: 600;
-      color: #64748b;
-      transition: all 0.3s;
-    }
-
-    .tab-button.active {
-      color: #2563eb;
-    }
-
-    .tab-button.active::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, #2563eb, #3b82f6);
-      border-radius: 3px 3px 0 0;
-    }
-
-    .tab-button:hover:not(.active) {
-      color: #475569;
-      background: rgba(0, 0, 0, 0.02);
-      border-radius: 8px 8px 0 0;
     }
 
     .pulse-dot {
@@ -188,82 +117,37 @@
     .btn-primary:active {
       transform: translateY(0);
     }
-
-    .loading {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: white;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
   </style>
 </head>
 
 <body>
 
-  <!-- Navigation -->
   <nav class="bg-white shadow-sm border-b sticky top-0 z-50">
     <div class="container mx-auto max-w-7xl px-4">
       <div class="flex justify-between items-center h-16">
-        <!-- Logo -->
         <div class="flex items-center space-x-3">
           <i data-lucide="microscope" class="w-8 h-8 text-blue-600"></i>
           <div>
             <h1 class="text-xl font-bold text-gray-900">Aquarium Research</h1>
-            <p class="text-xs text-gray-500">Control System Dashboard</p>
+            <p class="text-xs text-gray-500">Data Logging Dashboard</p>
           </div>
         </div>
 
-        <!-- Desktop Tabs -->
-        <div class="hidden md:flex items-center space-x-2">
-          <button onclick="showTab('dashboard')" class="tab-button active" id="tab-btn-dashboard">Dashboard</button>
-          <button onclick="showTab('experiments')" class="tab-button" id="tab-btn-experiments">Experiments</button>
-          <button onclick="showTab('analysis')" class="tab-button" id="tab-btn-analysis">Analysis</button>
+        <div class="flex items-center space-x-2">
+          <!-- <span class="tab-button active" id="tab-btn-dashboard">Dashboard</span> -->
           <div class="ml-4 flex items-center space-x-2 px-3 py-1.5 rounded-full" id="connection-status">
             <span class="pulse-dot w-2 h-2 bg-gray-400 rounded-full"></span>
             <span class="text-xs font-medium text-gray-500">Connecting...</span>
           </div>
         </div>
-
-        <!-- Mobile Hamburger -->
-        <button class="md:hidden text-gray-600" onclick="toggleMobileMenu()">
-          <i data-lucide="menu" class="w-6 h-6"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile Menu -->
-    <div id="mobile-menu" class="hidden md:hidden bg-white border-t">
-      <div class="container mx-auto max-w-7xl px-4 py-4 space-y-3">
-        <button onclick="showTabAndClose('dashboard')"
-          class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium">Dashboard</button>
-        <button onclick="showTabAndClose('experiments')"
-          class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium">Experiments</button>
-        <button onclick="showTabAndClose('analysis')"
-          class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium">Analysis</button>
-        <div class="px-4 py-2 flex items-center space-x-2 bg-gray-50 rounded-lg">
-          <span class="pulse-dot w-2 h-2 bg-gray-400 rounded-full"></span>
-          <span class="text-xs font-medium text-gray-500" id="mobile-connection-status">Connecting...</span>
-        </div>
       </div>
     </div>
   </nav>
 
-  <!-- Main Content -->
   <div class="container mx-auto max-w-7xl px-4 py-6">
 
-    <!-- DASHBOARD TAB -->
-    <div id="tab-dashboard" class="tab-content">
-      <!-- Real-time Metrics Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+    <div id="tab-dashboard" class="tab-content space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div class="card p-4">
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-blue-100 rounded-lg">
@@ -320,9 +204,8 @@
           </div>
         </div>
       </div>
-      
-      <!-- Charts -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="card p-6">
           <h3 class="text-lg font-bold mb-4 flex items-center">
             <i data-lucide="line-chart" class="w-5 h-5 mr-2 text-blue-600"></i>
@@ -343,13 +226,12 @@
         </div>
       </div>
 
-      <!-- Control Settings -->
-      <div class="card p-6 mb-6">
+      <fieldset id="control-settings-fieldset" class="card p-6">
         <h3 class="text-lg font-bold mb-4 flex items-center">
           <i data-lucide="settings" class="w-5 h-5 mr-2 text-gray-700"></i>
-          Control Settings
+          Control Settings & Export
         </h3>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 md:items-end">
           <div>
             <label class="block text-sm font-medium mb-2 text-gray-700">Mode Kontrol</label>
             <select id="control-mode"
@@ -374,9 +256,15 @@
               <span>Apply Changes</span>
             </button>
           </div>
+          <div class="flex items-end">
+            <button onclick="openExportModal()"
+              class="btn-primary !bg-green-600 hover:!bg-green-700 !shadow-green-300 w-full flex items-center justify-center space-x-2">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              <span>Export CSV</span>
+            </button>
+          </div>
         </div>
 
-        <!-- PID Parameters Section -->
         <div id="pid-params-control" class="mt-6">
           <h4 class="font-semibold mb-3 text-gray-700">PID Parameters</h4>
           <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -408,182 +296,47 @@
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Live Performance Metrics -->
-      <div class="card p-6">
-        <h3 class="text-lg font-bold mb-4 flex items-center">
-          <i data-lucide="bar-chart-3" class="w-5 h-5 mr-2 text-indigo-600"></i>
-          Live Performance Metrics
-        </h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="border-2 border-blue-100 rounded-xl p-4 bg-blue-50/50">
-            <h4 class="font-bold text-blue-700 mb-3 flex items-center">
-              <i data-lucide="thermometer-sun" class="w-4 h-4 mr-2"></i>
-              Temperature Control
-            </h4>
-            <div class="space-y-2.5 text-sm">
-              <div class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">Overshoot:</span>
-                <span id="metric-temp-overshoot" class="font-bold text-gray-900">--</span>
+        <div id="export-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden">
+          <div class="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl card">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+              <i data-lucide="calendar-clock" class="w-5 h-5 mr-2 text-blue-600"></i>
+              Export Data Berdasarkan Waktu
+            </h3>
+            <p class="text-gray-600 text-sm mb-4">
+              Pilih rentang tanggal dan waktu untuk data yang ingin Anda ekspor.
+            </p>
+        
+            <div class="space-y-4">
+              <div>
+                <label for="export-start-time" class="block text-sm font-medium mb-2 text-gray-700">Waktu Mulai</label>
+                <input type="datetime-local" id="export-start-time"
+                  class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
               </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">Settling Time:</span>
-                <span id="metric-temp-settling" class="font-bold text-gray-900">--</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">SSE:</span>
-                <span id="metric-temp-sse" class="font-bold text-gray-900">--</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">Peak Value:</span>
-                <span id="metric-temp-peak" class="font-bold text-gray-900">--</span>
+              <div>
+                <label for="export-end-time" class="block text-sm font-medium mb-2 text-gray-700">Waktu Selesai</label>
+                <input type="datetime-local" id="export-end-time"
+                  class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
               </div>
             </div>
-          </div>
-          <div class="border-2 border-amber-100 rounded-xl p-4 bg-amber-50/50">
-            <h4 class="font-bold text-amber-700 mb-3 flex items-center">
-              <i data-lucide="droplet" class="w-4 h-4 mr-2"></i>
-              Turbidity Control
-            </h4>
-            <div class="space-y-2.5 text-sm">
-              <div class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">Overshoot:</span>
-                <span id="metric-turb-overshoot" class="font-bold text-gray-900">--</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">Settling Time:</span>
-                <span id="metric-turb-settling" class="font-bold text-gray-900">--</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">SSE:</span>
-                <span id="metric-turb-sse" class="font-bold text-gray-900">--</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">Peak Value:</span>
-                <span id="metric-turb-peak" class="font-bold text-gray-900">--</span>
-              </div>
+        
+            <div class="flex justify-end space-x-3 mt-6">
+              <button onclick="closeExportModal()"
+                class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium px-4 py-2 rounded-lg transition">
+                Batal
+              </button>
+              <button onclick="downloadRangedCSV()" class="btn-primary flex items-center space-x-2">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span>Download CSV</span>
+              </button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- EXPERIMENTS TAB -->
-    <div id="tab-experiments" class="tab-content hidden">
-      <div class="card p-6 mb-6">
-        <h3 class="text-lg font-bold mb-4 flex items-center">
-          <i data-lucide="plus-circle" class="w-5 h-5 mr-2 text-green-600"></i>
-          Start New Experiment
-        </h3>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          <div>
-            <label class="block text-sm font-medium mb-2">Control Mode</label>
-            <select id="exp-mode" class="w-full p-2.5 border rounded-lg">
-              <option value="Fuzzy">Fuzzy Logic</option>
-              <option value="PID">PID Controller</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-2">Setpoint Suhu (°C)</label>
-            <input type="number" step="0.1" id="exp-temp-sp" value="28.0" class="w-full p-2.5 border rounded-lg">
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-2">Setpoint Kekeruhan (%)</label>
-            <input type="number" step="0.1" id="exp-turb-sp" value="10.0" class="w-full p-2.5 border rounded-lg">
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-2">Duration (minutes)</label>
-            <input type="number" id="exp-duration" value="10" min="1" max="60" class="w-full p-2.5 border rounded-lg">
-          </div>
-        </div>
-
-        <div id="pid-params" class="mb-4">
-          <h4 class="font-semibold mb-3 text-gray-700">PID Parameters</h4>
-          <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <div>
-              <label class="block text-xs font-medium mb-1">Kp Suhu</label>
-              <input type="number" step="0.1" id="exp-kp-temp" value="25" class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Ki Suhu</label>
-              <input type="number" step="0.1" id="exp-ki-temp" value="1.5" class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Kd Suhu</label>
-              <input type="number" step="0.1" id="exp-kd-temp" value="4" class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Kp Kekeruhan</label>
-              <input type="number" step="0.1" id="exp-kp-turb" value="10" class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Ki Kekeruhan</label>
-              <input type="number" step="0.1" id="exp-ki-turb" value="0.5" class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Kd Kekeruhan</label>
-              <input type="number" step="0.1" id="exp-kd-turb" value="1" class="w-full p-2 border rounded text-sm">
-            </div>
-          </div>
-        </div>
-
-        <button onclick="startExperiment()" class="btn-primary flex items-center space-x-2">
-          <i data-lucide="play" class="w-5 h-5"></i>
-          <span>Start Experiment</span>
-        </button>
-      </div>
-
-      <div class="card p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-bold flex items-center">
-            <i data-lucide="list" class="w-5 h-5 mr-2 text-gray-700"></i>
-            Recent Experiments
-          </h3>
-          <button onclick="loadExperiments()" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
-            <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>Refresh
-          </button>
-        </div>
-        <div id="experiment-list" class="space-y-3">
-          <p class="text-gray-500 text-center py-8">Loading experiments...</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- ANALYSIS TAB -->
-    <div id="tab-analysis" class="tab-content hidden">
-      <div class="card p-6">
-        <h3 class="text-lg font-bold mb-4 flex items-center">
-          <i data-lucide="git-compare" class="w-5 h-5 mr-2 text-indigo-600"></i>
-          Comparative Analysis
-        </h3>
-        <p class="text-gray-600 mb-6">Select two completed experiments to compare their performance metrics
-          side-by-side.</p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label class="block text-sm font-medium mb-2">Experiment 1</label>
-            <select id="compare-exp1" class="w-full p-2.5 border rounded-lg">
-              <option value="">-- Select Experiment --</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-2">Experiment 2</label>
-            <select id="compare-exp2" class="w-full p-2.5 border rounded-lg">
-              <option value="">-- Select Experiment --</option>
-            </select>
-          </div>
-        </div>
-        <button onclick="compareExperiments()" class="btn-primary flex items-center space-x-2">
-          <i data-lucide="git-compare-arrows" class="w-5 h-5"></i>
-          <span>Compare Experiments</span>
-        </button>
-        <div id="comparison-results" class="mt-6"></div>
-      </div>
+      </fieldset>
     </div>
 
   </div>
 
-  <!-- Import external script -->
   <script src="script.js"></script>
   <script>
     lucide.createIcons();

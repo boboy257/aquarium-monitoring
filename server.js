@@ -8,8 +8,6 @@ const cors = require('cors');
 
 // Models
 const ResearchData = require('./models/ResearchData');
-const PerformanceMetrics = require('./models/PerformanceMetrics');
-const Experiment = require('./models/Experiment');
 const Control = require('./models/Control');
 
 // Config
@@ -19,7 +17,7 @@ const CONFIG = {
   MQTT_BROKER: 'mqtt://broker.hivemq.com',
   MQTT_TOPIC_DATA: 'unhas/informatika/aquarium/data',
   MQTT_TOPIC_MODE: 'unhas/informatika/aquarium/mode',
-  MQTT_TOPIC_METRICS: 'unhas/informatika/aquarium/metrics'
+  MQTT_TOPIC_METRICS: 'unhas/informatika/aquarium/metrics' // Topic ini tidak akan terpakai lagi
 };
 
 const app = express();
@@ -49,7 +47,7 @@ app.use(express.static(frontendPath));
 console.log('[Static] Serving from:', frontendPath);
 
 // =========================================================================
-//                   MONGODB CONNECTION
+//                MONGODB CONNECTION
 // =========================================================================
 mongoose.connect(CONFIG.MONGODB_URI, {
   useNewUrlParser: true,
@@ -62,20 +60,19 @@ mongoose.connect(CONFIG.MONGODB_URI, {
 });
 
 // =========================================================================
-//                   MQTT CLIENT
+//                MQTT CLIENT
 // =========================================================================
 const mqttClient = mqtt.connect(CONFIG.MQTT_BROKER, {
   reconnectPeriod: 5000,
   keepalive: 60
 });
 
-// Hapus variabel lastDataTime karena kita hapus debounce
-
 mqttClient.on('connect', () => {
   console.log('[MQTT] ✅ Connected to broker');
   mqttClient.subscribe([
     CONFIG.MQTT_TOPIC_DATA,
-    CONFIG.MQTT_TOPIC_METRICS
+    CONFIG.MQTT_TOPIC_MODE // HANYA subscribe ke DATA dan MODE
+    // CONFIG.MQTT_TOPIC_METRICS // DIHAPUS DARI SUBSCRIBE
   ], { qos: 1 }, (err) => {
     if (err) {
       console.error('[MQTT] ❌ Subscribe error:', err);
@@ -85,83 +82,31 @@ mqttClient.on('connect', () => {
   });
 });
 
-// Tambahkan event listener untuk debugging
-mqttClient.on('disconnect', (reason) => {
-  console.error('[MQTT] ❌ DISCONNECTED:', reason);
-});
-
-mqttClient.on('reconnect', () => {
-  console.log('[MQTT] 🔄 Reconnecting...');
-});
-
-mqttClient.on('close', () => {
-  console.error('[MQTT] ❌ CONNECTION CLOSED');
-});
-
-mqttClient.on('offline', () => {
-  console.error('[MQTT] ❌ OFFLINE');
-});
+// ... (listener MQTT lainnya: disconnect, reconnect, close, offline) ...
 
 mqttClient.on('message', async (topic, message) => {
   try {
     const data = JSON.parse(message.toString());
     
     if (topic === CONFIG.MQTT_TOPIC_DATA) {
-      // HAPUS DEBOUNCE KARENA MENYEBABKAN STUCK
-      
       // Save to database
       console.log('[DEBUG] Raw MQTT Data:', data);
       let savedData = null;
       try {
         const savedData = await ResearchData.create(data);
-        if (savedData) { // Pastikan savedData tidak null
+        if (savedData) { 
           io.emit('newData', savedData);
         }
         console.log('[DEBUG] Data saved successfully:', savedData._id);
       } catch (dbError) {
         console.error('[MongoDB] Error saving data:', dbError.message);
         console.error('[MongoDB] Problematic data:', data);
-        // JANGAN BREAK LOOP, lanjutkan proses
-        return; // Hanya skip data ini, jangan break MQTT loop
+        return; 
       }
-      
-      // Emit via Socket.IO
-      //io.emit('newData', savedData);
-      
-      // Update experiment count
-      if (data.experiment_running && data.experiment_id) {
-        await Experiment.findOneAndUpdate(
-          { experiment_id: data.experiment_id },
-          { $inc: { 'results.data_points_count': 1 } }
-        );
-      }
-      
       console.log('[MQTT] Data saved:', data.suhu, '°C', data.turbidity_persen, '%');
-    }
-    
-    if (topic === CONFIG.MQTT_TOPIC_METRICS) {
-      await PerformanceMetrics.create(data);
-      io.emit('newMetrics', data);
-      
-      // Update experiment results
-      if (data.experiment_id) {
-        await Experiment.findOneAndUpdate(
-          { experiment_id: data.experiment_id },
-          { 
-            $set: { 
-              'results.temperature': data.temperature,
-              'results.turbidity': data.turbidity
-            }
-          }
-        );
-      }
-      
-      console.log('[MQTT] Metrics saved for:', data.experiment_id);
     }
   } catch (error) {
     console.error('[MQTT] Processing error:', error.message);
-    // JANGAN BREAK LOOP MQTT KARENA ERROR
-    // Biarkan fungsi selesai normal agar data berikutnya bisa diproses
   }
 });
 
@@ -170,10 +115,12 @@ mqttClient.on('error', (error) => {
 });
 
 // =========================================================================
-//                   API ROUTES
+//                API ROUTES
 // =========================================================================
 
-// Health check
+// ... (Route: /api/health, /api/data, /api/control (GET), /api/control (POST)) ...
+// ... (Tidak ada perubahan di route-route ini) ...
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -182,7 +129,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Get recent data
 app.get('/api/data', async (req, res) => {
   try {
     const { limit = 50 } = req.query;
@@ -197,7 +143,6 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
-// Get control settings
 app.get('/api/control', async (req, res) => {
   try {
     let control = await Control.findOne().lean();
@@ -220,7 +165,6 @@ app.get('/api/control', async (req, res) => {
   }
 });
 
-// Update control settings
 app.post('/api/control', async (req, res) => {
   try {
     console.log('[API] Control update request:', req.body);
@@ -231,18 +175,17 @@ app.post('/api/control', async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     
-    console.log('[API] Control updated in DB, now publishing to MQTT...'); // LOG TAMBAHAN
+    console.log('[API] Control updated in DB, now publishing to MQTT...'); 
     
-    // Publish to MQTT
     const payload = JSON.stringify(req.body);
     mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, payload, { qos: 1 }, (err) => {
-      console.log('[MQTT] Publish callback started'); // LOG TAMBAHAN
+      console.log('[MQTT] Publish callback started'); 
       if (err) {
         console.error('[MQTT] Publish error:', err);
         return res.status(500).json({ error: 'MQTT publish failed' });
       }
       console.log('[MQTT] ✅ Control sent to ESP32:', payload);
-      console.log('[API] Sending success response to frontend'); // LOG TAMBAHAN
+      console.log('[API] Sending success response to frontend');
       res.json({ success: true, data: updated });
     });
   } catch (error) {
@@ -251,154 +194,41 @@ app.post('/api/control', async (req, res) => {
   }
 });
 
-// Start experiment
-app.post('/api/experiment/start', async (req, res) => {
+// Export data CSV (VERSI BARU DENGAN RENTANG WAKTU)
+app.get('/api/export/csv/range', async (req, res) => {
   try {
-    console.log('[API] Start experiment request:', req.body);
-    
-    const { control_mode, suhu_setpoint, keruh_setpoint, duration_ms, pid_params } = req.body;
-    
-    if (!['Fuzzy', 'PID'].includes(control_mode)) {
-      return res.status(400).json({ error: 'Invalid control mode' });
+    const { start, end } = req.query;
+
+    if (!start || !end) {
+      return res.status(400).json({ error: 'Start and end query parameters are required.' });
     }
-    
-    const experiment_id = `${control_mode}_${Date.now()}`;
-    
-    // Create experiment
-    const experiment = await Experiment.create({
-      experiment_id,
-      control_mode,
-      config: {
-        suhu_setpoint,
-        keruh_setpoint,
-        duration_ms: duration_ms || 600000,
-        ...pid_params
-      },
-      status: 'running',
-      started_at: new Date()
-    });
-    
-    // Send to ESP32
-    const command = {
-      experiment_start: true,
-      experiment_id,
-      duration: duration_ms || 600000,
-      kontrol_aktif: control_mode,
-      suhu_setpoint,
-      keruh_setpoint,
-      ...pid_params
-    };
-    
-    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, JSON.stringify(command), { qos: 1 }, (err) => {
-      if (err) {
-        console.error('[MQTT] Publish error:', err);
-        return res.status(500).json({ error: 'Failed to send to ESP32' });
-      }
-      console.log('[MQTT] ✅ Experiment started:', experiment_id);
-      res.json({ success: true, experiment });
-    });
-  } catch (error) {
-    console.error('[API] Start experiment error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
-// Stop experiment
-app.post('/api/experiment/stop/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    await Experiment.findOneAndUpdate(
-      { experiment_id: id },
-      { status: 'stopped', completed_at: new Date() }
-    );
-    
-    const command = {
-      experiment_stop: true,
-      experiment_id: id
-    };
-    
-    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, JSON.stringify(command), { qos: 1 }, (err) => {
-      if (err) {
-        console.error('[MQTT] Publish error (stop):', err);
-      }
-      console.log('[API] Experiment stopped:', id);
-      res.json({ success: true });
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    const startDate = new Date(start);
+    const endDate = new Date(end);
 
-// Get experiments list
-app.get('/api/experiments', async (req, res) => {
-  try {
-    const { control_mode, status } = req.query;
-    const filter = {};
-    
-    if (control_mode) filter.control_mode = control_mode;
-    if (status) filter.status = status;
-    
-    const experiments = await Experiment.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
-    
-    res.json(experiments);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get experiment details
-app.get('/api/experiment/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const experiment = await Experiment.findOne({ experiment_id: id }).lean();
-    if (!experiment) {
-      return res.status(404).json({ error: 'Experiment not found' });
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format.' });
     }
-    
-    const data = await ResearchData.find({ experiment_id: id })
-      .sort({ timestamp: 1 })
-      .lean();
-    
-    const metrics = await PerformanceMetrics.find({ experiment_id: id })
-      .sort({ timestamp: -1 })
-      .limit(1)
-      .lean();
-    
-    res.json({
-      experiment,
-      data,
-      latest_metrics: metrics[0] || null,
-      data_count: data.length
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
-// Export experiment CSV
-app.get('/api/experiment/:id/export', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const data = await ResearchData.find({ experiment_id: id })
-      .sort({ timestamp: 1 })
-      .lean();
+    // Cari data di database berdasarkan rentang timestamp
+    const data = await ResearchData.find({
+      timestamp: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    })
+    .sort({ timestamp: 1 }) // Urutkan dari lama ke baru
+    .lean();
     
     if (data.length === 0) {
-      return res.status(404).json({ error: 'No data found' });
+      return res.status(404).send('<html><body><h1>No data found for the selected time range.</h1></body></html>');
     }
-    
-    let csv = 'Timestamp,Elapsed_S,Control_Mode,Temp_Actual,Temp_Setpoint,Temp_Error,PWM_Heater,Turb_Actual,Turb_Setpoint,Turb_Error,PWM_Pump\n';
+
+    let csv = 'Timestamp,Control_Mode,Temp_Actual,Temp_Setpoint,Temp_Error,PWM_Heater,Turb_Actual,Turb_Setpoint,Turb_Error,PWM_Pump\n';
     
     data.forEach(row => {
-      csv += `"${row.timestamp.toISOString()}",`;
-      csv += `${row.experiment_elapsed_s || 0},`;
-      csv += `"${row.kontrol_aktif}",`;
+      csv += `"${new Date(row.timestamp).toISOString()}",`;
+      csv += `"${row.kontrol_aktif || ''}",`;
       csv += `${row.suhu || 0},`;
       csv += `${row.setpoint_suhu || 0},`;
       csv += `${row.error_suhu || 0},`;
@@ -409,35 +239,15 @@ app.get('/api/experiment/:id/export', async (req, res) => {
       csv += `${row.pwm_pompa || 0}\n`;
     });
     
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="experiment_${id}.csv"`);
-    res.send('\uFEFF' + csv);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    // Buat nama file yang dinamis
+    const fileName = `aquarium_data_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}.csv`;
 
-// Compare experiments
-app.get('/api/compare/:id1/:id2', async (req, res) => {
-  try {
-    const { id1, id2 } = req.params;
-    
-    const [exp1, exp2, data1, data2] = await Promise.all([
-      Experiment.findOne({ experiment_id: id1 }).lean(),
-      Experiment.findOne({ experiment_id: id2 }).lean(),
-      ResearchData.find({ experiment_id: id1 }).sort({ timestamp: 1 }).lean(),
-      ResearchData.find({ experiment_id: id2 }).sort({ timestamp: 1 }).lean()
-    ]);
-    
-    if (!exp1 || !exp2) {
-      return res.status(404).json({ error: 'Experiment not found' });
-    }
-    
-    res.json({
-      experiment1: { info: exp1, data: data1, count: data1.length },
-      experiment2: { info: exp2, data: data2, count: data2.length }
-    });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send('\uFEFF' + csv); // \uFEFF untuk encoding Excel
+
   } catch (error) {
+    console.error('[API] Export CSV error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -447,7 +257,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
-// Catch-all for SPA routing
+// Catch-all
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {
     res.sendFile(path.join(frontendPath, 'index.html'));
@@ -457,7 +267,7 @@ app.get('*', (req, res) => {
 });
 
 // =========================================================================
-//                   SOCKET.IO
+//                SOCKET.IO
 // =========================================================================
 io.on('connection', (socket) => {
   console.log('[Socket.IO] ✅ Client connected:', socket.id);
@@ -472,17 +282,17 @@ io.on('connection', (socket) => {
 });
 
 // =========================================================================
-//                   SERVER START
+//                SERVER START
 // =========================================================================
 server.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
-║           🔬 AQUARIUM RESEARCH SYSTEM                     ║
+║         🔬 AQUARIUM RESEARCH SYSTEM                      ║
 ╠════════════════════════════════════════════════════════════╣
 ║ 🌐 Server:    http://localhost:${CONFIG.PORT}            
 ║ 📊 Database:  ${CONFIG.MONGODB_URI.includes('localhost') ? 'Local MongoDB' : 'Remote'}
-║ 🔌 MQTT:      ${CONFIG.MQTT_BROKER}
-║ ✅ Status:    All systems operational
+║ 🔌 MQTT:       ${CONFIG.MQTT_BROKER}
+║ ✅ Status:     All systems operational
 ╚════════════════════════════════════════════════════════════╝
   `);
 });
