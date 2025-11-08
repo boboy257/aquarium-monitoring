@@ -20,25 +20,15 @@ const researchDataSchema = new mongoose.Schema({
   
   // Errors
   error_suhu: { type: Number },
-  error_keruh: { type: Number },
+  error_keruh: { type: Number }
   
-  // PID Internals
-  //pid_integral_suhu: { type: Number },
- // pid_integral_keruh: { type: Number },
-  
-  // Experiment Info
-  experiment_running: { type: Boolean, default: false },
-  experiment_id: { type: String, index: true },
-  experiment_elapsed_s: { type: Number }
 }, {
   timestamps: true,
   collection: 'research_data',
   strict: false,
-   strictQuery: false
+  strictQuery: false
 });
 
-// Indexes
-researchDataSchema.index({ experiment_id: 1, timestamp: 1 });
 researchDataSchema.index({ kontrol_aktif: 1, timestamp: -1 });
 
 module.exports = mongoose.model('ResearchData', researchDataSchema);

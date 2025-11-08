@@ -34,12 +34,6 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Logging
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  next();
-});
-
 // Static files
 const frontendPath = path.join(__dirname, 'frontend');
 app.use(express.static(frontendPath));
@@ -72,7 +66,6 @@ mqttClient.on('connect', () => {
   mqttClient.subscribe([
     CONFIG.MQTT_TOPIC_DATA,
     CONFIG.MQTT_TOPIC_MODE // HANYA subscribe ke DATA dan MODE
-    // CONFIG.MQTT_TOPIC_METRICS // DIHAPUS DARI SUBSCRIBE
   ], { qos: 1 }, (err) => {
     if (err) {
       console.error('[MQTT] ❌ Subscribe error:', err);
@@ -97,7 +90,6 @@ mqttClient.on('message', async (topic, message) => {
         if (savedData) { 
           io.emit('newData', savedData);
         }
-        console.log('[DEBUG] Data saved successfully:', savedData._id);
       } catch (dbError) {
         console.error('[MongoDB] Error saving data:', dbError.message);
         console.error('[MongoDB] Problematic data:', data);
@@ -184,7 +176,7 @@ app.post('/api/control', async (req, res) => {
         console.error('[MQTT] Publish error:', err);
         return res.status(500).json({ error: 'MQTT publish failed' });
       }
-      console.log('[MQTT] ✅ Control sent to ESP32:', payload);
+      console.log('[MQTT] Control sent to ESP32:', payload);
       console.log('[API] Sending success response to frontend');
       res.json({ success: true, data: updated });
     });
@@ -227,7 +219,8 @@ app.get('/api/export/csv/range', async (req, res) => {
     let csv = 'Timestamp,Control_Mode,Temp_Actual,Temp_Setpoint,Temp_Error,PWM_Heater,Turb_Actual,Turb_Setpoint,Turb_Error,PWM_Pump\n';
     
     data.forEach(row => {
-      csv += `"${new Date(row.timestamp).toISOString()}",`;
+      const localTimestamp = new Date(row.timestamp).toLocaleString('sv-SE', { timeZone: 'Asia/Makassar' });
+      csv += `"${localTimestamp}",`;
       csv += `"${row.kontrol_aktif || ''}",`;
       csv += `${row.suhu || 0},`;
       csv += `${row.setpoint_suhu || 0},`;
