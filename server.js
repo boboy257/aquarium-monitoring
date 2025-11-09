@@ -142,13 +142,13 @@ app.get('/api/control', async (req, res) => {
       control = {
         kontrol_aktif: "Fuzzy",
         suhu_setpoint: 28.0,
-        kp_suhu: 25,
-        ki_suhu: 1.5,
-        kd_suhu: 4,
+        kp_suhu: 8,
+        ki_suhu: 0.3,
+        kd_suhu: 6,
         keruh_setpoint: 10.0,
-        kp_keruh: 10,
-        ki_keruh: 0.5,
-        kd_keruh: 1
+        kp_keruh: 5,
+        ki_keruh: 0.2,
+        kd_keruh: 2
       };
     }
     res.json(control);
