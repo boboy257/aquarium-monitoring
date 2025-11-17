@@ -15,9 +15,13 @@ const controlSchema = new mongoose.Schema({
   ki_keruh: Number,         // Gain Integral untuk kekeruhan
   kd_keruh: Number,         // Gain Derivatif untuk kekeruhan
 
+  // Kalibrasi ADC (TAMBAHKAN DEFAULT VALUE!)
+  adc_jernih: { type: Number, default: 9475 },
+  adc_keruh: { type: Number, default: 3550 },
+
   timestamp: { type: Date, default: Date.now } // Waktu data disimpan (opsional, tapi bagus untuk logging)
 }, {
-  // strict: false // Kamu bisa menambahkan ini jika ingin menyimpan field tambahan yang tidak didefinisikan, tapi tidak disarankan untuk skema yang sudah ditentukan
+  strict: false // Kamu bisa menambahkan ini jika ingin menyimpan field tambahan yang tidak didefinisikan, tapi tidak disarankan untuk skema yang sudah ditentukan
 });
 
 module.exports = mongoose.model('Control', controlSchema);

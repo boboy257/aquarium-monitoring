@@ -298,13 +298,16 @@ async function updateControl() {
   const mode = document.getElementById('control-mode').value;
   const tempSp = parseFloat(document.getElementById('control-temp-sp').value);
   const turbSp = parseFloat(document.getElementById('control-turb-sp').value);
+
   if (isNaN(tempSp) || isNaN(turbSp)) {
     showNotification('Please enter valid numbers', 'error');
     return;
   }
+  
   currentTempSetpoint = tempSp;
   currentTurbSetpoint = turbSp;
-  const payload = { kontrol_aktif: mode, suhu_setpoint: tempSp, keruh_setpoint: turbSp };
+
+  const payload = { kontrol_aktif: mode, suhu_setpoint: tempSp, keruh_setpoint: turbSp};
   if (mode === 'PID') {
     payload.kp_suhu = parseFloat(document.getElementById('control-kp-temp').value);
     payload.ki_suhu = parseFloat(document.getElementById('control-ki-temp').value);
@@ -336,6 +339,11 @@ async function loadControlSettings() {
     document.getElementById('control-mode').value = control.kontrol_aktif || 'Fuzzy';
     document.getElementById('control-temp-sp').value = control.suhu_setpoint || 28.0;
     document.getElementById('control-turb-sp').value = control.keruh_setpoint || 10.0;
+
+    // BARU: Load nilai kalibrasi ADC
+    document.getElementById('control-adc-jernih').value = control.adc_jernih || 9475;
+    document.getElementById('control-adc-keruh').value = control.adc_keruh || 3550;
+    
     currentTempSetpoint = control.suhu_setpoint || 28.0;
     currentTurbSetpoint = control.keruh_setpoint || 10.0;
   } catch (error) {
@@ -406,6 +414,151 @@ async function downloadRangedCSV() {
 }
 
 // =========================================================================
+//                FUNGSI UPLOAD KALIBRASI SENSOR
+// =========================================================================
+
+// FUNGSI BARU: Upload Kalibrasi Sensor
+async function uploadCalibration() {
+  const adcJernih = parseInt(document.getElementById('calib-adc-jernih').value);
+  const adcKeruh = parseInt(document.getElementById('calib-adc-keruh').value);
+  
+  // Validasi
+  if (isNaN(adcJernih) || isNaN(adcKeruh)) {
+    showNotification('Nilai ADC harus berupa angka!', 'error');
+    return;
+  }
+  
+  if (adcJernih === adcKeruh) {
+    showNotification('Nilai ADC jernih dan keruh tidak boleh sama!', 'error');
+    return;
+  }
+  
+  if (adcJernih < 0 || adcJernih > 32767 || adcKeruh < 0 || adcKeruh > 32767) {
+    showNotification('Nilai ADC harus antara 0-32767!', 'warning');
+    return;
+  }
+  
+  // Update status
+  document.getElementById('calib-status').textContent = 'Uploading...';
+  
+  const payload = {
+    adc_jernih: adcJernih,
+    adc_keruh: adcKeruh
+  };
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/calibration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const result = await res.json();
+    
+    console.log('[Calibration] Updated:', result);
+    
+    // Update status UI
+    document.getElementById('calib-status').textContent = 'Berhasil dikalibrasi ✓';
+    document.getElementById('calib-status').className = 'font-semibold text-green-600';
+    
+    const now = new Date().toLocaleString('id-ID');
+    document.getElementById('calib-last-update').textContent = `Terakhir: ${now}`;
+    
+    showNotification('Kalibrasi sensor berhasil dikirim ke ESP32!', 'success');
+    
+    // Reset status setelah 3 detik
+    setTimeout(() => {
+      document.getElementById('calib-status').textContent = 'Siap untuk kalibrasi ulang';
+      document.getElementById('calib-status').className = 'font-semibold text-gray-800';
+    }, 3000);
+    
+  } catch (error) {
+    console.error('[Calibration] Error:', error);
+    document.getElementById('calib-status').textContent = 'Gagal upload ✗';
+    document.getElementById('calib-status').className = 'font-semibold text-red-600';
+    showNotification('Gagal mengirim kalibrasi!', 'error');
+  }
+}
+
+// FUNGSI: Reset ke nilai default
+function resetCalibration() {
+  document.getElementById('calib-adc-jernih').value = 9475;
+  document.getElementById('calib-adc-keruh').value = 3550;
+  document.getElementById('calib-status').textContent = 'Default values restored';
+  document.getElementById('calib-status').className = 'font-semibold text-blue-600';
+  showNotification('Nilai kalibrasi di-reset ke default', 'info');
+  
+  setTimeout(() => {
+    document.getElementById('calib-status').textContent = 'Menunggu input...';
+    document.getElementById('calib-status').className = 'font-semibold text-gray-800';
+  }, 2000);
+}
+
+// FUNGSI: Load kalibrasi dari server saat page load
+async function loadCalibrationSettings() {
+  try {
+    const res = await fetch(`${API_BASE}/api/control`);
+    const control = await res.json();
+    
+    if (control.adc_jernih) {
+      document.getElementById('calib-adc-jernih').value = control.adc_jernih;
+    }
+    if (control.adc_keruh) {
+      document.getElementById('calib-adc-keruh').value = control.adc_keruh;
+    }
+    
+    if (control.adc_jernih && control.adc_keruh) {
+      document.getElementById('calib-status').textContent = 'Loaded from database ✓';
+      document.getElementById('calib-status').className = 'font-semibold text-green-600';
+      
+      setTimeout(() => {
+        document.getElementById('calib-status').textContent = 'Siap untuk kalibrasi ulang';
+        document.getElementById('calib-status').className = 'font-semibold text-gray-800';
+      }, 2000);
+    }
+  } catch (error) {
+    console.error('[Calibration] Load error:', error);
+  }
+}
+
+// UPDATE: Fungsi updateDashboard untuk live ADC monitor
+function updateDashboard(data) {
+  if (!data) {
+    console.error('[ERROR] Received null data');
+    return;
+  }
+  
+  document.getElementById('current-temp').textContent = `${formatNumber(data.suhu)}°C`;
+  document.getElementById('current-turb').textContent = `${formatNumber(data.turbidity_persen)}%`;
+  document.getElementById('current-mode').textContent = data.kontrol_aktif || '--';
+  document.getElementById('current-pwm-heater').textContent = `${formatNumber(data.pwm_heater, 1)}%`;
+  document.getElementById('current-pwm-pump').textContent = `${formatNumber(data.pwm_pompa, 1)}%`;
+
+  // UPDATE LIVE ADC VALUE (jika ada)
+  if (data.turbidity_adc !== undefined) {
+    const liveADC = document.getElementById('live-adc-value');
+    if (liveADC) {
+      liveADC.textContent = data.turbidity_adc;
+      liveADC.classList.add('animate-pulse');
+      setTimeout(() => liveADC.classList.remove('animate-pulse'), 300);
+    }
+  }
+
+  const timestamp = new Date();
+  dataBuffer.push({
+    time: timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    temp: data.suhu || 0,
+    turb: data.turbidity_persen || 0
+  });
+
+  if (dataBuffer.length > 50) {
+    dataBuffer.shift();
+  }
+  updateCharts();
+}
+
+// =========================================================================
 //                EVENT LISTENERS
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -416,6 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCharts();
     connectSocket();
     loadControlSettings(); // Load pengaturan manual saat mulai
+    loadCalibrationSettings(); // TAMBAHKAN INI
     lucide.createIcons();
     
     // Listener untuk toggle PID di Control Settings

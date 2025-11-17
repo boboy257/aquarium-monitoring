@@ -160,11 +160,28 @@ app.get('/api/control', async (req, res) => {
 app.post('/api/control', async (req, res) => {
   try {
     console.log('[API] Control update request:', req.body);
+    console.log('[API] Request Body:', JSON.stringify(req.body, null, 2));
     
+    // Pastikan adc_jernih dan adc_keruh ada dalam body
+    if (!req.body.hasOwnProperty('adc_jernih')) {
+      req.body.adc_jernih = 9475; // Default jika tidak ada
+    }
+    if (!req.body.hasOwnProperty('adc_keruh')) {
+      req.body.adc_keruh = 3550; // Default jika tidak ada
+    }
+    
+    console.log('[API] Body after defaults:', JSON.stringify(req.body, null, 2));
+    
+    // Update database
     const updated = await Control.findOneAndUpdate(
-      {},
-      req.body,
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      {}, // Find any document (since we only have 1 control document)
+      { $set: req.body }, // Use $set to ensure fields are updated
+      { 
+        upsert: true,      // Create if not exists
+        new: true,         // Return updated document
+        setDefaultsOnInsert: true,
+        runValidators: false  // Don't validate (allow any fields)
+      }
     );
     
     console.log('[API] Control updated in DB, now publishing to MQTT...'); 
@@ -182,6 +199,73 @@ app.post('/api/control', async (req, res) => {
     });
   } catch (error) {
     console.error('[API] Control update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// New route: POST /api/calibration (khusus untuk kalibrasi sensor)
+app.post('/api/calibration', async (req, res) => {
+  try {
+    console.log('[API] ===== Calibration Update Request =====');
+    console.log('[API] Calibration data:', req.body);
+    
+    const { adc_jernih, adc_keruh } = req.body;
+    
+    // Validasi
+    if (!adc_jernih || !adc_keruh) {
+      return res.status(400).json({ error: 'adc_jernih and adc_keruh are required' });
+    }
+    
+    if (adc_jernih === adc_keruh) {
+      return res.status(400).json({ error: 'adc_jernih and adc_keruh must be different' });
+    }
+    
+    // Update database (hanya field ADC)
+    const updated = await Control.findOneAndUpdate(
+      {},
+      { 
+        $set: { 
+          adc_jernih: parseInt(adc_jernih),
+          adc_keruh: parseInt(adc_keruh)
+        }
+      },
+      { 
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true
+      }
+    );
+    
+    console.log('[API] ✅ Calibration updated in DB');
+    
+    // Publish HANYA nilai ADC ke MQTT
+    const mqttPayload = {
+      adc_jernih: parseInt(adc_jernih),
+      adc_keruh: parseInt(adc_keruh)
+    };
+    
+    const payloadStr = JSON.stringify(mqttPayload);
+    console.log('[MQTT] Publishing calibration:', payloadStr);
+    
+    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, payloadStr, { qos: 1 }, (err) => {
+      if (err) {
+        console.error('[MQTT] ❌ Publish error:', err);
+        return res.status(500).json({ error: 'MQTT publish failed' });
+      }
+      console.log('[MQTT] ✅ Calibration sent to ESP32');
+      console.log('[API] ========================================\n');
+      res.json({ 
+        success: true, 
+        message: 'Calibration updated successfully',
+        data: {
+          adc_jernih: updated.adc_jernih,
+          adc_keruh: updated.adc_keruh
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error('[API] ❌ Calibration error:', error);
     res.status(500).json({ error: error.message });
   }
 });
