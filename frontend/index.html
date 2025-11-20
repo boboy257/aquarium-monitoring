@@ -16,108 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js"></script>
   <script src="https://unpkg.com/lucide@0.423.0"></script>
 
-  <style>
-    /* CSS Anda dari sebelumnya, tidak perlu diubah */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background-color: #f8fafc;
-    }
-
-    .pulse-dot {
-      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.5;
-      }
-    }
-
-    .notification {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 9999;
-      animation: slideIn 0.3s ease-out;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-    }
-
-    @keyframes slideIn {
-      from {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-
-    @keyframes slideOut {
-      from {
-        transform: translateX(0);
-        opacity: 1;
-      }
-
-      to {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-    }
-
-    .card {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      transition: box-shadow 0.3s;
-    }
-
-    .card:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    input:focus,
-    select:focus,
-    textarea:focus {
-      outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
-      color: white;
-      font-weight: 600;
-      padding: 0.75rem 1.5rem;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
-      transition: all 0.3s;
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-    }
-
-    .btn-primary:active {
-      transform: translateY(0);
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
@@ -132,10 +31,8 @@
             <p class="text-xs text-gray-500">Data Logging Dashboard</p>
           </div>
         </div>
-
         <div class="flex items-center space-x-2">
-          <!-- <span class="tab-button active" id="tab-btn-dashboard">Dashboard</span> -->
-          <div class="ml-4 flex items-center space-x-2 px-3 py-1.5 rounded-full" id="connection-status">
+          <div class="ml-4 flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-100" id="connection-status">
             <span class="pulse-dot w-2 h-2 bg-gray-400 rounded-full"></span>
             <span class="text-xs font-medium text-gray-500">Connecting...</span>
           </div>
@@ -145,8 +42,8 @@
   </nav>
 
   <div class="container mx-auto max-w-7xl px-4 py-6">
+    <div class="space-y-6">
 
-    <div id="tab-dashboard" class="tab-content space-y-6">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div class="card p-4">
           <div class="flex items-center space-x-3">
@@ -265,111 +162,31 @@
           </div>
         </div>
 
-        <div id="pid-params-control" class="mt-6">
+        <div id="pid-params-control" class="mt-6 hidden">
           <h4 class="font-semibold mb-3 text-gray-700">PID Parameters</h4>
           <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <div>
-              <label class="block text-xs font-medium mb-1">Kp Suhu</label>
-              <input type="number" step="0.1" id="control-kp-temp" value="8" class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Ki Suhu</label>
-              <input type="number" step="0.1" id="control-ki-temp" value="0.3"
-                class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Kd Suhu</label>
-              <input type="number" step="0.1" id="control-kd-temp" value="6" class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Kp Kekeruhan</label>
-              <input type="number" step="0.1" id="control-kp-turb" value="5" class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Ki Kekeruhan</label>
-              <input type="number" step="0.1" id="control-ki-turb" value="0.2"
-                class="w-full p-2 border rounded text-sm">
-            </div>
-            <div>
-              <label class="block text-xs font-medium mb-1">Kd Kekeruhan</label>
-              <input type="number" step="0.1" id="control-kd-turb" value="2" class="w-full p-2 border rounded text-sm">
-            </div>
-          </div>
-        </div>
-        <div id="export-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden">
-          <div class="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl card">
-            <h3 class="text-xl font-bold mb-4 flex items-center">
-              <i data-lucide="calendar-clock" class="w-5 h-5 mr-2 text-blue-600"></i>
-              Export Data Berdasarkan Waktu
-            </h3>
-            <p class="text-gray-600 text-sm mb-4">
-              Pilih rentang tanggal dan waktu untuk data yang ingin Anda ekspor.
-            </p>
-        
-            <div class="space-y-4">
-              <div>
-                <label for="export-start-time" class="block text-sm font-medium mb-2 text-gray-700">Waktu Mulai</label>
-                <input type="datetime-local" id="export-start-time"
-                  class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-              </div>
-              <div>
-                <label for="export-end-time" class="block text-sm font-medium mb-2 text-gray-700">Waktu Selesai</label>
-                <input type="datetime-local" id="export-end-time"
-                  class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-              </div>
-            </div>
-        
-            <div class="flex justify-end space-x-3 mt-6">
-              <button onclick="closeExportModal()"
-                class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium px-4 py-2 rounded-lg transition">
-                Batal
-              </button>
-              <button onclick="downloadRangedCSV()" class="btn-primary flex items-center space-x-2">
-                <i data-lucide="download" class="w-4 h-4"></i>
-                <span>Download CSV</span>
-              </button>
-            </div>
+            <div><label class="block text-xs font-medium mb-1">Kp Suhu</label><input type="number" step="0.1"
+                id="control-kp-temp" class="w-full p-2 border rounded text-sm"></div>
+            <div><label class="block text-xs font-medium mb-1">Ki Suhu</label><input type="number" step="0.1"
+                id="control-ki-temp" class="w-full p-2 border rounded text-sm"></div>
+            <div><label class="block text-xs font-medium mb-1">Kd Suhu</label><input type="number" step="0.1"
+                id="control-kd-temp" class="w-full p-2 border rounded text-sm"></div>
+            <div><label class="block text-xs font-medium mb-1">Kp Kekeruhan</label><input type="number" step="0.1"
+                id="control-kp-turb" class="w-full p-2 border rounded text-sm"></div>
+            <div><label class="block text-xs font-medium mb-1">Ki Kekeruhan</label><input type="number" step="0.1"
+                id="control-ki-turb" class="w-full p-2 border rounded text-sm"></div>
+            <div><label class="block text-xs font-medium mb-1">Kd Kekeruhan</label><input type="number" step="0.1"
+                id="control-kd-turb" class="w-full p-2 border rounded text-sm"></div>
           </div>
         </div>
       </fieldset>
 
-      <!-- =========================================================================
-           FIELDSET BARU: SENSOR CALIBRATION (TERPISAH)
-           Letakkan SETELAH fieldset control-settings-fieldset
-           ========================================================================= -->
-      
       <fieldset id="sensor-calibration-fieldset" class="card p-6">
         <h3 class="text-lg font-bold mb-4 flex items-center">
           <i data-lucide="sliders" class="w-5 h-5 mr-2 text-amber-600"></i>
           Sensor Turbidity Calibration
         </h3>
-      
-        <!-- Info Box -->
-        <div class="bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 rounded-lg p-4 mb-6">
-          <div class="flex items-start space-x-3">
-            <i data-lucide="info" class="w-6 h-6 text-amber-600 mt-0.5 flex-shrink-0"></i>
-            <div class="text-sm text-amber-900">
-              <p class="font-semibold mb-2 text-base">📋 Panduan Kalibrasi Sensor:</p>
-              <ol class="list-decimal ml-4 space-y-2">
-                <li><strong>Persiapan:</strong> Siapkan 2 wadah - satu berisi air bersih/jernih, satu lagi air keruh (bisa
-                  tambahkan tanah/lumpur)</li>
-                <li><strong>Ukur Air Jernih:</strong> Celupkan sensor ke air jernih, tunggu 5 detik, catat nilai <code
-                    class="bg-white px-1 py-0.5 rounded">ADC</code> dari Serial Monitor ESP32</li>
-                <li><strong>Ukur Air Keruh:</strong> Celupkan sensor ke air keruh maksimal, tunggu 5 detik, catat nilai <code
-                    class="bg-white px-1 py-0.5 rounded">ADC</code> dari Serial Monitor</li>
-                <li><strong>Input Data:</strong> Masukkan kedua nilai ADC ke form di bawah</li>
-                <li><strong>Upload:</strong> Klik tombol <strong>"Upload Calibration"</strong> untuk kirim ke ESP32</li>
-              </ol>
-              <p class="mt-3 text-xs italic">💡 Tip: Nilai ADC biasanya berkisar 0-32767. Air jernih = nilai tinggi, air keruh
-                = nilai rendah.</p>
-            </div>
-          </div>
-        </div>
-      
-        <!-- Calibration Inputs with Live ADC Monitor -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-          <!-- Current ADC Reading -->
           <div class="lg:col-span-1">
             <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
               <i data-lucide="activity" class="w-8 h-8 text-blue-600 mx-auto mb-2"></i>
@@ -378,77 +195,53 @@
               <p class="text-xs text-blue-500 mt-2">Monitor dari ESP32</p>
             </div>
           </div>
-      
-          <!-- Calibration Form -->
           <div class="lg:col-span-2 space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <!-- ADC Jernih -->
-              <div class="relative">
-                <label class="block text-sm font-semibold mb-2 text-gray-700 flex items-center">
-                  <i data-lucide="droplet" class="w-4 h-4 mr-2 text-blue-500"></i>
-                  Nilai ADC Air Jernih
-                </label>
-                <input type="number" step="1" id="calib-adc-jernih" value="9475"
-                  class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-semibold">
-                <p class="text-xs text-gray-500 mt-1.5 flex items-center">
-                  <span class="inline-block w-2 h-2 bg-blue-400 rounded-full mr-1.5"></span>
-                  Default: 9475 (turbidity = 0%)
-                </p>
+              <div>
+                <label class="block text-sm font-semibold mb-2 text-gray-700">Nilai ADC Air Jernih</label>
+                <input type="number" id="calib-adc-jernih" value="9475"
+                  class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg font-semibold">
               </div>
-      
-              <!-- ADC Keruh -->
-              <div class="relative">
-                <label class="block text-sm font-semibold mb-2 text-gray-700 flex items-center">
-                  <i data-lucide="droplets" class="w-4 h-4 mr-2 text-amber-500"></i>
-                  Nilai ADC Air Keruh
-                </label>
-                <input type="number" step="1" id="calib-adc-keruh" value="3550"
-                  class="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-lg font-semibold">
-                <p class="text-xs text-gray-500 mt-1.5 flex items-center">
-                  <span class="inline-block w-2 h-2 bg-amber-400 rounded-full mr-1.5"></span>
-                  Default: 3550 (turbidity = 100%)
-                </p>
+              <div>
+                <label class="block text-sm font-semibold mb-2 text-gray-700">Nilai ADC Air Keruh</label>
+                <input type="number" id="calib-adc-keruh" value="3550"
+                  class="w-full p-3 border-2 border-gray-300 rounded-lg text-lg font-semibold">
               </div>
             </div>
-      
-            <!-- Action Buttons -->
-            <div class="flex items-center justify-end space-x-3 pt-2">
+            <div class="flex justify-end space-x-3">
               <button onclick="resetCalibration()"
-                class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-5 py-2.5 rounded-lg transition flex items-center space-x-2 border border-gray-300">
-                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-                <span>Reset Default</span>
-              </button>
+                class="bg-gray-100 px-5 py-2.5 rounded-lg border border-gray-300 font-semibold">Reset</button>
               <button onclick="uploadCalibration()"
-                class="btn-primary !bg-amber-600 hover:!bg-amber-700 !shadow-amber-300 px-6 py-2.5 flex items-center space-x-2">
-                <i data-lucide="upload" class="w-5 h-5"></i>
-                <span>Upload Calibration</span>
-              </button>
+                class="btn-primary !bg-amber-600 hover:!bg-amber-700 !shadow-amber-300 px-6 py-2.5">Upload
+                Calibration</button>
             </div>
-          </div>
-        </div>
-      
-        <!-- Status Info -->
-        <div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <div class="flex items-center justify-between text-sm">
-            <div class="flex items-center space-x-2">
-              <i data-lucide="database" class="w-4 h-4 text-gray-500"></i>
-              <span class="text-gray-600">Status Kalibrasi:</span>
-              <span id="calib-status" class="font-semibold text-gray-800">Menunggu input...</span>
-            </div>
-            <div class="text-xs text-gray-500" id="calib-last-update">
-              Belum dikalibrasi
+            <div class="text-sm text-gray-500 flex justify-between mt-2">
+              <span id="calib-status">Menunggu input...</span>
+              <span id="calib-last-update">Belum dikalibrasi</span>
             </div>
           </div>
         </div>
       </fieldset>
     </div>
+  </div>
 
+  <div id="export-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 hidden">
+    <div class="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl">
+      <h3 class="text-xl font-bold mb-4">Export Data</h3>
+      <div class="space-y-4">
+        <div><label class="block text-sm mb-2">Waktu Mulai</label><input type="datetime-local" id="export-start-time"
+            class="w-full p-2 border rounded"></div>
+        <div><label class="block text-sm mb-2">Waktu Selesai</label><input type="datetime-local" id="export-end-time"
+            class="w-full p-2 border rounded"></div>
+      </div>
+      <div class="flex justify-end space-x-3 mt-6">
+        <button onclick="closeExportModal()" class="bg-gray-200 px-4 py-2 rounded">Batal</button>
+        <button onclick="downloadRangedCSV()" class="btn-primary">Download CSV</button>
+      </div>
+    </div>
   </div>
 
   <script src="script.js"></script>
-  <script>
-    lucide.createIcons();
-  </script>
 </body>
 
 </html>
