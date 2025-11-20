@@ -1,21 +1,21 @@
 /**
  * AQUARIUM RESEARCH DASHBOARD
- * ----------------------------------------------
- * Merged & Optimized Script
+ * Complete Logic: Real-time, Control, Calibration, Zoom, & Watchdog
  */
 
 // =========================================================================
 // 1. CONFIG & GLOBAL STATE
 // =========================================================================
 const CONFIG = {
-  API_BASE: window.location.origin,
-  MAX_DATA_POINTS: 50, // Jumlah titik data di grafik sebelum digeser
+  API_BASE: window.location.origin, // Otomatis deteksi host (localhost:3000)
+  MAX_DATA_POINTS: 50,              // Jumlah data di grafik
   RECONNECT_DELAY: 2000,
   TIMEOUT: 20000,
+  WATCHDOG_THRESHOLD: 5000,         // 5 Detik tanpa data = Sensor Mati
   COLORS: {
-    temp: 'rgb(59, 130, 246)', // Blue
-    turb: 'rgb(245, 158, 11)', // Amber
-    setpoint: 'rgba(255, 0, 0, 1)' // Red
+    temp: 'rgb(59, 130, 246)',      // Blue
+    turb: 'rgb(245, 158, 11)',      // Amber
+    setpoint: 'rgba(255, 0, 0, 1)'  // Red Dotted
   }
 };
 
@@ -26,6 +26,8 @@ let state = {
   socket: null,
   dataBuffer: [],
   isConnected: false,
+  lastDataTime: Date.now(), // Untuk Watchdog
+  watchdogInterval: null,
   setpoints: {
     temp: 28.0,
     turb: 10.0
@@ -36,13 +38,11 @@ let state = {
 // 2. UTILITY FUNCTIONS
 // =========================================================================
 
-// Helper untuk format angka
 function formatNumber(num, decimals = 2) {
   if (num === null || num === undefined || isNaN(num)) return '--';
   return Number(num).toFixed(decimals);
 }
 
-// Helper untuk notifikasi Toast
 function showNotification(message, type = 'info') {
   const colors = {
     success: 'bg-green-500',
@@ -50,16 +50,10 @@ function showNotification(message, type = 'info') {
     info: 'bg-blue-500',
     warning: 'bg-amber-500'
   };
-  const icons = {
-    success: '✓',
-    error: '✕',
-    info: 'ℹ',
-    warning: '⚠'
-  };
+  const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
 
   const notif = document.createElement('div');
-  notif.className = `notification ${colors[type]} text-white px-6 py-4 rounded-lg shadow-xl flex items-center space-x-3 max-w-md transition-all duration-300`;
-  notif.style.zIndex = '10000'; // Pastikan di atas elemen lain
+  notif.className = `notification ${colors[type]} text-white px-6 py-4 rounded-lg shadow-xl flex items-center space-x-3 max-w-md transition-all duration-300 fixed top-5 right-5 z-[9999] translate-x-full`;
   notif.innerHTML = `
     <span class="text-xl font-bold">${icons[type]}</span>
     <span class="font-medium">${message}</span>
@@ -67,18 +61,18 @@ function showNotification(message, type = 'info') {
 
   document.body.appendChild(notif);
 
-  // Animasi masuk
-  setTimeout(() => notif.style.transform = 'translateX(0)', 10);
+  // Animasi Masuk
+  requestAnimationFrame(() => {
+    notif.style.transform = 'translateX(0)';
+  });
 
-  // Hapus otomatis
+  // Hapus Otomatis
   setTimeout(() => {
-    notif.style.opacity = '0';
-    notif.style.transform = 'translateX(20px)';
+    notif.style.transform = 'translateX(120%)'; // Slide out
     setTimeout(() => notif.remove(), 300);
   }, 3000);
 }
 
-// Helper untuk status koneksi UI
 function updateConnectionStatus(connected) {
   state.isConnected = connected;
   const statusEl = document.getElementById('connection-status');
@@ -88,7 +82,7 @@ function updateConnectionStatus(connected) {
     : { bg: 'bg-red-100', dot: 'bg-red-500', text: 'text-red-700', label: 'Disconnected' };
 
   if (statusEl) {
-    statusEl.className = `ml-4 flex items-center space-x-2 px-3 py-1.5 rounded-full ${config.bg} transition-colors duration-300`;
+    statusEl.className = `flex items-center space-x-2 px-3 py-1.5 rounded-full ${config.bg} w-full sm:w-auto justify-center transition-colors duration-300`;
     statusEl.innerHTML = `
       <span class="w-2 h-2 ${config.dot} rounded-full ${connected ? '' : 'animate-pulse'}"></span>
       <span class="text-xs font-medium ${config.text}">${config.label}</span>
@@ -96,14 +90,48 @@ function updateConnectionStatus(connected) {
   }
 }
 
-// Helper format tanggal untuk input datetime-local
 function formatDateForInput(date) {
   const pad = (num) => String(num).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 // =========================================================================
-// 3. SOCKET.IO CONNECTION
+// 3. WATCHDOG TIMER (DETEKSI SENSOR MATI)
+// =========================================================================
+function startWatchdog() {
+  if (state.watchdogInterval) clearInterval(state.watchdogInterval);
+
+  state.watchdogInterval = setInterval(() => {
+    const now = Date.now();
+    const timeDiff = now - state.lastDataTime;
+    const alertEl = document.getElementById('sensor-watchdog-alert');
+    
+    // Jika tidak ada data > 5 detik
+    if (timeDiff > CONFIG.WATCHDOG_THRESHOLD) {
+      if (alertEl && alertEl.classList.contains('hidden')) {
+        // Tampilkan Banner
+        alertEl.classList.remove('hidden');
+        console.warn(`[Watchdog] ⚠️ SENSOR DEAD! No data for ${Math.floor(timeDiff/1000)}s`);
+        
+        // Ubah tampilan nilai jadi "LOST" merah
+        const ids = ['current-temp', 'current-turb', 'current-pwm-heater', 'current-pwm-pump', 'live-adc-value'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.dataset.prevVal = el.textContent; // Simpan nilai lama
+                el.textContent = "LOST";
+                el.classList.add('text-red-500', 'animate-pulse');
+                // Hapus warna asli sementara
+                el.classList.remove('text-blue-600', 'text-amber-600', 'text-green-600', 'text-red-600', 'text-purple-600'); 
+            }
+        });
+      }
+    }
+  }, 1000); // Cek setiap 1 detik
+}
+
+// =========================================================================
+// 4. SOCKET.IO CONNECTION
 // =========================================================================
 function connectSocket() {
   console.log('[Socket] Connecting...');
@@ -111,8 +139,7 @@ function connectSocket() {
   state.socket = io(CONFIG.API_BASE, {
     transports: ['websocket', 'polling'],
     timeout: CONFIG.TIMEOUT,
-    reconnection: true,
-    reconnectionDelay: CONFIG.RECONNECT_DELAY
+    reconnection: true
   });
 
   state.socket.on('connect', () => {
@@ -121,13 +148,7 @@ function connectSocket() {
     showNotification('Terhubung ke server', 'success');
   });
 
-  state.socket.on('disconnect', (reason) => {
-    console.warn('[Socket] ❌ Disconnected:', reason);
-    updateConnectionStatus(false);
-  });
-
-  state.socket.on('connect_error', (error) => {
-    console.error('[Socket] Error:', error.message);
+  state.socket.on('disconnect', () => {
     updateConnectionStatus(false);
   });
 
@@ -137,12 +158,38 @@ function connectSocket() {
 }
 
 // =========================================================================
-// 4. DATA PROCESSING & DASHBOARD UI
+// 5. DATA PROCESSING (UI UPDATE)
 // =========================================================================
 function processNewData(data) {
   if (!data) return;
 
-  // 1. Update Kartu Info Utama
+  // --- A. RESET WATCHDOG ---
+  state.lastDataTime = Date.now();
+  
+  // Sembunyikan Alert Banner jika muncul
+  const alertEl = document.getElementById('sensor-watchdog-alert');
+  if (alertEl && !alertEl.classList.contains('hidden')) {
+    alertEl.classList.add('hidden');
+    showNotification('Koneksi Sensor Pulih', 'success');
+    
+    // Reset style elemen (Hapus merah/LOST)
+    const ids = [
+        {id: 'current-temp', color: 'text-blue-600'},
+        {id: 'current-turb', color: 'text-amber-600'},
+        {id: 'current-pwm-heater', color: 'text-red-600'},
+        {id: 'current-pwm-pump', color: 'text-purple-600'},
+        {id: 'live-adc-value', color: 'text-blue-600'}
+    ];
+    ids.forEach(item => {
+        const el = document.getElementById(item.id);
+        if(el) {
+            el.classList.remove('text-red-500', 'animate-pulse');
+            el.classList.add(item.color);
+        }
+    });
+  }
+
+  // --- B. UPDATE KARTU UTAMA ---
   const els = {
     temp: document.getElementById('current-temp'),
     turb: document.getElementById('current-turb'),
@@ -157,22 +204,10 @@ function processNewData(data) {
   if (els.mode) els.mode.textContent = data.kontrol_aktif || '--';
   if (els.heater) els.heater.textContent = `${formatNumber(data.pwm_heater, 1)}%`;
   if (els.pump) els.pump.textContent = `${formatNumber(data.pwm_pompa, 1)}%`;
+  if (els.adc && data.turbidity_adc !== undefined) els.adc.textContent = data.turbidity_adc;
 
-  // 2. Update Live ADC (dengan efek visual)
-  if (els.adc && data.turbidity_adc !== undefined) {
-    els.adc.textContent = data.turbidity_adc;
-    // Tambah efek visual pulse kecil saat data masuk
-    els.adc.classList.remove('text-blue-600');
-    els.adc.classList.add('text-blue-400');
-    setTimeout(() => {
-      els.adc.classList.remove('text-blue-400');
-      els.adc.classList.add('text-blue-600');
-    }, 100);
-  }
-
-  // 3. Update Buffer Data untuk Grafik
-  const timestamp = new Date();
-  const timeStr = timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // --- C. BUFFER DATA GRAFIK ---
+  const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   
   state.dataBuffer.push({
     time: timeStr,
@@ -180,39 +215,46 @@ function processNewData(data) {
     turb: data.turbidity_persen || 0
   });
 
-  // Jaga agar array tidak terlalu panjang
   if (state.dataBuffer.length > CONFIG.MAX_DATA_POINTS) {
     state.dataBuffer.shift();
   }
 
-  // 4. Refresh Grafik
   updateCharts();
 }
 
 // =========================================================================
-// 5. CHART MANAGEMENT
+// 6. CHART MANAGEMENT (ZOOM & PAN ENABLED)
 // =========================================================================
 function initCharts() {
+  // Opsi Umum Grafik
   const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: { position: 'top' },
-      tooltip: { 
-        backgroundColor: 'rgba(0,0,0,0.8)', 
-        padding: 10, 
-        cornerRadius: 8 
+      legend: { position: 'top', labels: { boxWidth: 12, padding: 10 } },
+      tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, cornerRadius: 8 },
+      // --- KONFIGURASI ZOOM ---
+      zoom: {
+        pan: {
+          enabled: true,
+          mode: 'x', // Hanya geser horizontal (Waktu)
+        },
+        zoom: {
+          wheel: { enabled: true }, // Scroll mouse
+          pinch: { enabled: true }, // Cubit layar HP
+          mode: 'x',
+        }
       }
     },
     scales: {
       x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
       y: { grid: { color: '#f1f5f9' } }
     },
-    animation: false // Matikan animasi agar performa real-time ringan
+    animation: false // Matikan animasi agar performa tinggi
   };
 
-  // Chart Suhu
+  // 1. CHART SUHU
   const ctxTemp = document.getElementById('chartTemp');
   if (ctxTemp) {
     state.chartTemp = new Chart(ctxTemp.getContext('2d'), {
@@ -228,7 +270,7 @@ function initCharts() {
             borderWidth: 2,
             tension: 0.4,
             fill: true,
-            pointRadius: 0
+            pointRadius: 0 // Titik hilang agar rapi, muncul saat hover
           },
           {
             label: 'Setpoint',
@@ -242,12 +284,12 @@ function initCharts() {
       },
       options: {
         ...commonOptions,
-        scales: { ...commonOptions.scales, y: { min: 20, max: 35 } }
+        scales: { ...commonOptions.scales, y: { min: 20, max: 35 } } // Range Suhu Akuarium
       }
     });
   }
 
-  // Chart Kekeruhan
+  // 2. CHART KEKERUHAN
   const ctxTurb = document.getElementById('chartTurb');
   if (ctxTurb) {
     state.chartTurb = new Chart(ctxTurb.getContext('2d'), {
@@ -290,30 +332,39 @@ function updateCharts() {
   const tempData = state.dataBuffer.map(d => d.temp);
   const turbData = state.dataBuffer.map(d => d.turb);
 
-  // Update Data Suhu
+  // Update Chart Suhu
   state.chartTemp.data.labels = labels;
   state.chartTemp.data.datasets[0].data = tempData;
   state.chartTemp.data.datasets[1].data = Array(tempData.length).fill(state.setpoints.temp);
-  state.chartTemp.update('none'); // 'none' mode prevents re-animation
+  state.chartTemp.update('none'); // 'none' = update tanpa animasi berat
 
-  // Update Data Kekeruhan
+  // Update Chart Turbidity
   state.chartTurb.data.labels = labels;
   state.chartTurb.data.datasets[0].data = turbData;
   state.chartTurb.data.datasets[1].data = Array(turbData.length).fill(state.setpoints.turb);
   state.chartTurb.update('none');
 }
 
+// Fungsi Reset Zoom (Dipanggil oleh tombol HTML)
+function resetZoomChart(type) {
+  if (type === 'temp' && state.chartTemp) {
+    state.chartTemp.resetZoom();
+  } else if (type === 'turb' && state.chartTurb) {
+    state.chartTurb.resetZoom();
+  }
+}
+
 // =========================================================================
-// 6. CONTROL LOGIC (API)
+// 7. CONTROL LOGIC
 // =========================================================================
 async function loadControlSettings() {
   try {
     const res = await fetch(`${CONFIG.API_BASE}/api/control`);
-    if (!res.ok) throw new Error('Gagal mengambil data');
+    if (!res.ok) throw new Error('API Error');
     
     const data = await res.json();
 
-    // Update UI Kontrol
+    // Isi Form
     const els = {
       mode: document.getElementById('control-mode'),
       tempSp: document.getElementById('control-temp-sp'),
@@ -324,7 +375,6 @@ async function loadControlSettings() {
       kpTurb: document.getElementById('control-kp-turb'),
       kiTurb: document.getElementById('control-ki-turb'),
       kdTurb: document.getElementById('control-kd-turb'),
-      // Calibration Inputs
       adcJernih: document.getElementById('calib-adc-jernih'),
       adcKeruh: document.getElementById('calib-adc-keruh')
     };
@@ -333,24 +383,23 @@ async function loadControlSettings() {
     if (els.tempSp) els.tempSp.value = data.suhu_setpoint || 28.0;
     if (els.turbSp) els.turbSp.value = data.keruh_setpoint || 10.0;
 
-    // Trigger event change untuk menampilkan/menyembunyikan PID params
+    // Trigger perubahan mode (untuk hide/show PID params)
     if (els.mode) els.mode.dispatchEvent(new Event('change'));
 
-    // Isi nilai PID jika ada
+    // Isi PID params jika ada
     if (els.kpTemp) els.kpTemp.value = data.kp_suhu || 0;
     if (els.kiTemp) els.kiTemp.value = data.ki_suhu || 0;
     if (els.kdTemp) els.kdTemp.value = data.kd_suhu || 0;
-    // ... dst untuk turb ...
+    // ... (lainnya sesuai kebutuhan)
 
-    // Isi nilai Kalibrasi jika ada
+    // Isi Kalibrasi
     if (data.adc_jernih && els.adcJernih) els.adcJernih.value = data.adc_jernih;
     if (data.adc_keruh && els.adcKeruh) els.adcKeruh.value = data.adc_keruh;
 
-    // Update state lokal
+    // Update Setpoint Lokal
     state.setpoints.temp = parseFloat(data.suhu_setpoint) || 28.0;
     state.setpoints.turb = parseFloat(data.keruh_setpoint) || 10.0;
 
-    console.log('[API] Settings loaded');
   } catch (error) {
     console.error('[API] Load error:', error);
     showNotification('Gagal memuat pengaturan awal', 'error');
@@ -363,18 +412,17 @@ async function updateControl() {
   const turbSp = parseFloat(document.getElementById('control-turb-sp').value);
 
   if (isNaN(tempSp) || isNaN(turbSp)) {
-    showNotification('Setpoint harus berupa angka!', 'error');
+    showNotification('Setpoint harus angka!', 'warning');
     return;
   }
 
-  // Payload dasar
   const payload = {
     kontrol_aktif: mode,
     suhu_setpoint: tempSp,
     keruh_setpoint: turbSp
   };
 
-  // Jika PID, ambil parameter tambahan
+  // Jika PID, masukkan parameter PID
   if (mode === 'PID') {
     payload.kp_suhu = parseFloat(document.getElementById('control-kp-temp').value) || 0;
     payload.ki_suhu = parseFloat(document.getElementById('control-ki-temp').value) || 0;
@@ -391,34 +439,31 @@ async function updateControl() {
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error('Gagal update');
     
-    // Update State Lokal agar grafik langsung berubah
     state.setpoints.temp = tempSp;
     state.setpoints.turb = turbSp;
+    showNotification('Pengaturan disimpan!', 'success');
 
-    showNotification('Pengaturan berhasil disimpan!', 'success');
   } catch (error) {
-    console.error('[Control] Error:', error);
     showNotification('Gagal menyimpan pengaturan', 'error');
   }
 }
 
 // =========================================================================
-// 7. CALIBRATION LOGIC
+// 8. CALIBRATION LOGIC
 // =========================================================================
 async function uploadCalibration() {
   const adcJernih = parseInt(document.getElementById('calib-adc-jernih').value);
   const adcKeruh = parseInt(document.getElementById('calib-adc-keruh').value);
   const statusEl = document.getElementById('calib-status');
 
-  // Validasi
   if (isNaN(adcJernih) || isNaN(adcKeruh)) {
-    showNotification('Nilai ADC harus berupa angka!', 'warning');
+    showNotification('Nilai ADC harus angka!', 'warning');
     return;
   }
   if (adcJernih === adcKeruh) {
-    showNotification('Nilai ADC jernih dan keruh tidak boleh sama!', 'warning');
+    showNotification('Nilai tidak boleh sama!', 'warning');
     return;
   }
 
@@ -433,46 +478,48 @@ async function uploadCalibration() {
 
     if (!res.ok) throw new Error('Gagal upload');
 
-    statusEl.innerHTML = '<span class="text-green-600">Berhasil dikalibrasi ✓</span>';
-    document.getElementById('calib-last-update').textContent = `Terakhir: ${new Date().toLocaleString('id-ID')}`;
-    showNotification('Kalibrasi Sensor Berhasil!', 'success');
+    statusEl.innerHTML = '<span class="text-green-600 font-semibold">Tersimpan ✓</span>';
+    document.getElementById('calib-last-update').textContent = `Update: ${new Date().toLocaleTimeString()}`;
+    showNotification('Kalibrasi Berhasil!', 'success');
 
     setTimeout(() => {
-      statusEl.innerHTML = '<span class="text-gray-800">Siap untuk kalibrasi ulang</span>';
+      statusEl.innerHTML = 'Menunggu input...';
     }, 3000);
 
   } catch (error) {
-    console.error('[Calibration] Error:', error);
-    statusEl.innerHTML = '<span class="text-red-600">Gagal upload ✗</span>';
-    showNotification('Gagal mengirim kalibrasi', 'error');
+    statusEl.innerHTML = '<span class="text-red-600 font-semibold">Gagal ✗</span>';
+    showNotification('Gagal upload kalibrasi', 'error');
   }
 }
 
 function resetCalibration() {
   document.getElementById('calib-adc-jernih').value = 9475;
   document.getElementById('calib-adc-keruh').value = 3550;
-  showNotification('Nilai dikembalikan ke default', 'info');
 }
 
 // =========================================================================
-// 8. EXPORT / CSV LOGIC
+// 9. EXPORT LOGIC
 // =========================================================================
 function openExportModal() {
   const modal = document.getElementById('export-modal');
   if (modal) {
     const end = new Date();
-    const start = new Date(end.getTime() - (60 * 60 * 1000)); // Default 1 jam lalu
+    const start = new Date(end.getTime() - (60 * 60 * 1000)); // 1 jam lalu
     
     document.getElementById('export-start-time').value = formatDateForInput(start);
     document.getElementById('export-end-time').value = formatDateForInput(end);
     
     modal.classList.remove('hidden');
+    // Animasi masuk (opsional)
+    setTimeout(() => modal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 10);
   }
 }
 
 function closeExportModal() {
   const modal = document.getElementById('export-modal');
-  if (modal) modal.classList.add('hidden');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
 }
 
 function downloadRangedCSV() {
@@ -480,7 +527,7 @@ function downloadRangedCSV() {
   const endVal = document.getElementById('export-end-time').value;
 
   if (!startVal || !endVal) {
-    showNotification('Waktu mulai dan selesai harus diisi', 'warning');
+    showNotification('Isi waktu mulai & selesai', 'warning');
     return;
   }
 
@@ -488,36 +535,30 @@ function downloadRangedCSV() {
   const endISO = new Date(endVal).toISOString();
 
   if (new Date(startISO) >= new Date(endISO)) {
-    showNotification('Waktu mulai harus lebih kecil dari waktu selesai', 'warning');
+    showNotification('Waktu mulai harus < selesai', 'warning');
     return;
   }
 
-  // Buka link download di tab baru
   const url = `${CONFIG.API_BASE}/api/export/csv/range?start=${startISO}&end=${endISO}`;
   window.open(url, '_blank');
   closeExportModal();
-  showNotification('Sedang mengunduh CSV...', 'info');
+  showNotification('Mengunduh CSV...', 'info');
 }
 
 // =========================================================================
-// 9. INITIALIZATION
+// 10. INITIALIZATION
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[App] Initializing...');
 
-  // 1. Setup Charts
   initCharts();
-
-  // 2. Setup Socket
   connectSocket();
-
-  // 3. Load Initial Data from DB/API
   loadControlSettings();
+  startWatchdog(); // Jalankan deteksi sensor mati
 
-  // 4. Setup Event Listeners UI
+  // Listener Toggle PID/Fuzzy
   const modeSelect = document.getElementById('control-mode');
   const pidParams = document.getElementById('pid-params-control');
-  
   if (modeSelect && pidParams) {
     modeSelect.addEventListener('change', (e) => {
       if (e.target.value === 'PID') {
@@ -528,13 +569,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 5. Initialize Icons
+  // Init Icons
   if (window.lucide) window.lucide.createIcons();
-});
-
-// Cleanup saat halaman ditutup
-window.addEventListener('beforeunload', () => {
-  if (state.socket) state.socket.disconnect();
-  if (state.chartTemp) state.chartTemp.destroy();
-  if (state.chartTurb) state.chartTurb.destroy();
 });
