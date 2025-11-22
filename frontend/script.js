@@ -11,7 +11,7 @@ const CONFIG = {
   MAX_DATA_POINTS: 50,              // Jumlah data di grafik
   RECONNECT_DELAY: 2000,
   TIMEOUT: 20000,
-  WATCHDOG_THRESHOLD: 5000,         // 5 Detik tanpa data = Sensor Mati
+  WATCHDOG_THRESHOLD: 30000,         // 30 Detik tanpa data = Sensor Mati
   COLORS: {
     temp: 'rgb(59, 130, 246)',      // Blue
     turb: 'rgb(245, 158, 11)',      // Amber
@@ -364,6 +364,10 @@ async function loadControlSettings() {
     
     const data = await res.json();
 
+    console.group("🔌 [LOAD] Pengaturan Kontrol dari Server");
+    console.table(data); // Menampilkan data rapi dalam bentuk tabel
+    console.groupEnd();
+
     // Isi Form
     const els = {
       mode: document.getElementById('control-mode'),
@@ -431,6 +435,8 @@ async function updateControl() {
     payload.ki_keruh = parseFloat(document.getElementById('control-ki-turb').value) || 0;
     payload.kd_keruh = parseFloat(document.getElementById('control-kd-turb').value) || 0;
   }
+
+  console.log("🚀 [SEND] Mengirim Update Kontrol:", payload);
 
   try {
     const res = await fetch(`${CONFIG.API_BASE}/api/control`, {
