@@ -155,6 +155,14 @@ function connectSocket() {
   state.socket.on('newData', (data) => {
     processNewData(data);
   });
+
+  state.socket.on('debugLog', (packet) => {
+    if (packet.type === 'CONTROL') {
+        // [TAMBAHAN] Update variabel global jika ada perubahan baru
+        lastKnownControlSettings = packet.data;
+    }
+    logToTerminal(packet.data, packet.type);
+  });
 }
 
 // =========================================================================
@@ -162,6 +170,8 @@ function connectSocket() {
 // =========================================================================
 function processNewData(data) {
   if (!data) return;
+
+  logToTerminal(data, 'DATA');
 
   // --- A. RESET WATCHDOG ---
   state.lastDataTime = Date.now();
@@ -363,6 +373,11 @@ async function loadControlSettings() {
     if (!res.ok) throw new Error('API Error');
     
     const data = await res.json();
+
+    lastKnownControlSettings = data;
+    setTimeout(() => {
+        logToTerminal(data, 'CONTROL');
+    }, 1500);
 
     console.group("🔌 [LOAD] Pengaturan Kontrol dari Server");
     console.table(data); // Menampilkan data rapi dalam bentuk tabel
@@ -578,3 +593,98 @@ document.addEventListener('DOMContentLoaded', () => {
   // Init Icons
   if (window.lucide) window.lucide.createIcons();
 });
+
+// =========================================================================
+// 11. DEBUG CONSOLE LOGIC (NEW FEATURE)
+// =========================================================================
+const debugState = {
+  maxLogs: 50, // Batas log biar browser tidak berat
+  isVisible: false
+};
+
+function toggleDebugConsole() {
+  const wrapper = document.getElementById('debug-console-wrapper');
+  debugState.isVisible = !debugState.isVisible;
+  
+  if (debugState.isVisible) {
+    wrapper.classList.remove('hidden');
+  } else {
+    wrapper.classList.add('hidden');
+  }
+}
+
+function clearDebugConsole() {
+  const container = document.getElementById('debug-log-container');
+  container.innerHTML = '<div class="opacity-50 italic">Log cleared. Waiting for data...</div>';
+}
+
+function logToTerminal(data, type = 'DATA') {
+  // Hanya proses jika terminal dibuka (untuk performa)
+  // Hapus "if (!debugState.isVisible) return;" jika ingin log tetap jalan di background
+  
+  const container = document.getElementById('debug-log-container');
+  if (!container) return;
+
+  const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+  const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
+  
+  // Format JSON biar berwarna (Syntax Highlighting sederhana)
+  let jsonString = JSON.stringify(data);
+  
+  // Mewarnai Key dan Value (Regex sederhana)
+  jsonString = jsonString.replace(/"([^"]+)":/g, '<span class="log-key">"$1":</span>');
+  jsonString = jsonString.replace(/:([0-9.]+)/g, ':<span class="log-num">$1</span>');
+  jsonString = jsonString.replace(/:("[^"]+")/g, ':<span class="log-val">$1</span>');
+  jsonString = jsonString.replace(/:(true|false)/g, ':<span class="log-bool">$1</span>');
+
+  // Warna Label & Border
+  let labelColor = '#4ade80'; 
+  let borderColor = '#4ade80'; // Default Hijau
+
+  if (type === 'CONTROL') {
+      labelColor = '#c084fc'; borderColor = '#c084fc'; // Ungu
+  } else if (type === 'CALIB') {
+      labelColor = '#facc15'; borderColor = '#facc15'; // Kuning
+  } else if (type === 'AUTO-FIX') {
+      labelColor = '#f87171'; borderColor = '#f87171'; // Merah
+  }
+  const entry = document.createElement('div');
+  // Inline Styles
+  entry.style.borderLeft = `4px solid ${borderColor}`;
+  entry.style.paddingLeft = '8px';
+  entry.style.marginBottom = '4px';
+  entry.style.fontFamily = 'monospace';
+  entry.style.fontSize = '12px';
+  entry.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+
+  entry.innerHTML = `
+    <span class="log-time">[${time}]</span> 
+    <span class="label-${type}">[${type}]</span> 
+    <span style="color: #d4d4d4;">${jsonString}</span>
+  `;
+
+  container.appendChild(entry);
+
+  if (isNearBottom) {
+      container.scrollTop = container.scrollHeight;
+  }
+
+  // Bersihkan log lama
+  while (container.children.length > debugState.maxLogs) {
+    container.removeChild(container.firstChild);
+  }
+}
+
+// =======================================================
+// [TAMBAHAN] GLOBAL VARIABLE UNTUK MENYIMPAN SETTINGAN TERAKHIR
+// =======================================================
+let lastKnownControlSettings = null;
+
+// Timer untuk menampilkan ulang data Control setiap 5 detik
+// Agar tidak "tenggelam" oleh data sensor
+setInterval(() => {
+    if (lastKnownControlSettings) {
+        // Tampilkan lagi di terminal
+        logToTerminal(lastKnownControlSettings, 'CONTROL');
+    }
+}, 5000); // <-- Ubah 5000 jadi 3000 jika ingin lebih cepat (3 detik)

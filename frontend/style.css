@@ -83,3 +83,100 @@ textarea:focus {
 .btn-primary:active {
     transform: translateY(0);
 }
+
+/* --- DEBUG TERMINAL STYLES --- */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+.log-entry {
+    border-left: 2px solid transparent;
+    padding-left: 8px;
+    margin-bottom: 4px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    animation: fadeIn 0.2s ease-in;
+}
+
+.log-entry:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Syntax Highlighting Colors (VS Code Style) */
+.log-time {
+    color: #6b7280;
+    margin-right: 8px;
+    user-select: none;
+    font-size: 0.9em;
+}
+
+.log-key {
+    color: #9cdcfe;
+}
+
+/* Biru Muda */
+.log-val {
+    color: #ce9178;
+}
+
+/* Merah Bata/String */
+.log-num {
+    color: #b5cea8;
+}
+
+/* Hijau Muda/Angka */
+.log-bool {
+    color: #569cd6;
+}
+
+/* Biru/Boolean */
+
+/* Label Type Colors */
+.label-DATA {
+    color: #4ade80;
+    font-weight: bold;
+}
+
+/* Green */
+.label-CONTROL {
+    color: #c084fc;
+    font-weight: bold;
+}
+
+/* Purple */
+.label-CALIB {
+    color: #facc15;
+    font-weight: bold;
+}
+
+/* Yellow */
+.label-AUTO-FIX {
+    color: #f87171;
+    font-weight: bold;
+}
+
+/* Red */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

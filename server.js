@@ -34,7 +34,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Static files
+// [MODIFIKASI] Menambahkan definisi variabel frontendPath agar tidak ReferenceError
 const frontendPath = path.join(__dirname, 'frontend');
 app.use(express.static(frontendPath));
 
@@ -61,21 +61,44 @@ const mqttClient = mqtt.connect(CONFIG.MQTT_BROKER, {
   keepalive: 60
 });
 
-mqttClient.on('connect', () => {
+// [MODIFIKASI] Menambahkan Logika 'Anti Lupa' saat Server Baru Nyala
+mqttClient.on('connect', async () => {
   console.log('[MQTT] ✅ Connected to broker');
+  
+  // Subscribe Data Sensor
   mqttClient.subscribe([
     CONFIG.MQTT_TOPIC_DATA,
-    CONFIG.MQTT_TOPIC_MODE // HANYA subscribe ke DATA dan MODE
+    CONFIG.MQTT_TOPIC_MODE 
   ], { qos: 1 }, (err) => {
-    if (err) {
-      console.error('[MQTT] ❌ Subscribe error:', err);
-    } else {
-      console.log('[MQTT] ✅ Subscribed to topics');
-    }
+    if (err) console.error('[MQTT] ❌ Subscribe error:', err);
+    else console.log('[MQTT] ✅ Subscribed to topics');
   });
+
+  // --- TAMBAHAN: SINKRONISASI STARTUP ---
+  try {
+    // Ambil settingan terakhir dari DB
+    let lastSettings = await Control.findOne().sort({ timestamp: -1 }).lean();
+
+    // Jika database kosong, buat default
+    if (!lastSettings) {
+      lastSettings = await Control.create({});
+      lastSettings = lastSettings.toObject();
+    }
+
+    // Bersihkan data sampah MongoDB (_id, dll) agar ESP32 tidak error
+    delete lastSettings._id; delete lastSettings.__v; delete lastSettings.timestamp;
+
+    // Kirim ke ESP32 dengan RETAIN: TRUE
+    const payload = JSON.stringify(lastSettings);
+    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, payload, { qos: 1, retain: true });
+    console.log(`[Sync] 🔄 Mode Terakhir Dikirim ke ESP32: ${lastSettings.kontrol_aktif}`);
+
+  } catch (err) {
+    console.error('[Sync] Gagal sync startup:', err);
+  }
 });
 
-// ... (listener MQTT lainnya: disconnect, reconnect, close, offline) ...
+// ... (listener MQTT lainnya tetap sama) ...
 
 mqttClient.on('message', async (topic, message) => {
   try {
@@ -83,19 +106,43 @@ mqttClient.on('message', async (topic, message) => {
     
     if (topic === CONFIG.MQTT_TOPIC_DATA) {
       // Save to database
-      console.log('[DEBUG] Raw MQTT Data:', data);
+      // console.log('[DEBUG] Raw MQTT Data:', data); // Opsional: di-comment biar terminal bersih
       let savedData = null;
       try {
         const savedData = await ResearchData.create(data);
         if (savedData) { 
           io.emit('newData', savedData);
+          // [MODIFIKASI] Kirim ke Debug Terminal Frontend
+          io.emit('debugLog', { type: 'DATA', data: data });
         }
+        const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
+        const mode = (data.kontrol_aktif || '-').toUpperCase().padEnd(5, ' '); // Rata kiri 5 karakter
+
+        // Format Suhu: T:Aktual/Set (Err:.. PWM:..)
+        const tAct = (data.suhu || 0).toFixed(2);
+        const tSet = (data.setpoint_suhu || 0).toFixed(1);
+        const tErr = (data.error_suhu || 0).toFixed(2);
+        const tPwm = (data.pwm_heater || 0).toFixed(0);
+        const strSuhu = `T:${tAct}/${tSet}°C (E:${tErr} PWM:${tPwm})`;
+
+        // Format Keruh: K:Aktual/Set (Err:.. PWM:..)
+        const kAct = (data.turbidity_persen || 0).toFixed(1);
+        const kSet = (data.setpoint_keruh || 0).toFixed(1);
+        const kErr = (data.error_keruh || 0).toFixed(1);
+        const kPwm = (data.pwm_pompa || 0).toFixed(0);
+        const strKeruh = `K:${kAct}/${kSet}% (E:${kErr} PWM:${kPwm})`;
+        
+        const strAdc = `ADC:${data.turbidity_adc || 0}`;
+
+        // CETAK HASIL (Satu Baris Rapi)
+        console.log(`[${time}] [${mode}] ${strSuhu} | ${strKeruh} | ${strAdc}`);
       } catch (dbError) {
         console.error('[MongoDB] Error saving data:', dbError.message);
-        console.error('[MongoDB] Problematic data:', data);
         return; 
       }
       console.log('[MQTT] Data saved:', data.suhu, '°C', data.turbidity_persen, '%');
+      
+      // [PENTING] SAYA HAPUS LOGIKA "AUTO-FIX" DARI SINI KARENA ITU PENYEBAB GAGAL UPDATE
     }
   } catch (error) {
     console.error('[MQTT] Processing error:', error.message);
@@ -110,9 +157,7 @@ mqttClient.on('error', (error) => {
 //                API ROUTES
 // =========================================================================
 
-// ... (Route: /api/health, /api/data, /api/control (GET), /api/control (POST)) ...
-// ... (Tidak ada perubahan di route-route ini) ...
-
+// ... (Route Health & Data tidak berubah) ...
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -137,19 +182,11 @@ app.get('/api/data', async (req, res) => {
 
 app.get('/api/control', async (req, res) => {
   try {
-    let control = await Control.findOne().lean();
+    // [MODIFIKASI] Mengambil data terbaru (sort timestamp desc)
+    let control = await Control.findOne().sort({ timestamp: -1 }).lean();
     if (!control) {
-      control = {
-        kontrol_aktif: "Fuzzy",
-        suhu_setpoint: 28.0,
-        kp_suhu: 8,
-        ki_suhu: 0.3,
-        kd_suhu: 6,
-        keruh_setpoint: 10.0,
-        kp_keruh: 5,
-        ki_keruh: 0.2,
-        kd_keruh: 2
-      };
+        // Jika kosong buat baru (pakai default dari schema)
+        control = await Control.create({});
     }
     res.json(control);
   } catch (error) {
@@ -157,112 +194,89 @@ app.get('/api/control', async (req, res) => {
   }
 });
 
+// [MODIFIKASI] Route Update Control (Agar ESP32 menerima data)
 app.post('/api/control', async (req, res) => {
   try {
     console.log('[API] Control update request:', req.body);
-    console.log('[API] Request Body:', JSON.stringify(req.body, null, 2));
     
-    // Pastikan adc_jernih dan adc_keruh ada dalam body
-    if (!req.body.hasOwnProperty('adc_jernih')) {
-      req.body.adc_jernih = 9475; // Default jika tidak ada
-    }
-    if (!req.body.hasOwnProperty('adc_keruh')) {
-      req.body.adc_keruh = 3550; // Default jika tidak ada
-    }
-    
-    console.log('[API] Body after defaults:', JSON.stringify(req.body, null, 2));
-    
-    // Update database
+    // 1. Simpan ke DB dulu
     const updated = await Control.findOneAndUpdate(
-      {}, // Find any document (since we only have 1 control document)
-      { $set: req.body }, // Use $set to ensure fields are updated
-      { 
-        upsert: true,      // Create if not exists
-        new: true,         // Return updated document
-        setDefaultsOnInsert: true,
-        runValidators: false  // Don't validate (allow any fields)
-      }
+      {}, 
+      { $set: req.body }, 
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     
-    console.log('[API] Control updated in DB, now publishing to MQTT...'); 
-    
-    const payload = JSON.stringify(req.body);
-    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, payload, { qos: 1 }, (err) => {
-      console.log('[MQTT] Publish callback started'); 
-      if (err) {
-        console.error('[MQTT] Publish error:', err);
-        return res.status(500).json({ error: 'MQTT publish failed' });
-      }
-      console.log('[MQTT] Control sent to ESP32:', payload);
-      console.log('[API] Sending success response to frontend');
-      res.json({ success: true, data: updated });
+    // 2. BERSIHKAN DATA (Hanya ambil field penting & pastikan tipe angka)
+    // Ini agar ESP32 tidak "tersedak" data sampah MongoDB
+    const cleanPayload = {
+        kontrol_aktif: req.body.kontrol_aktif, // String
+        suhu_setpoint: parseFloat(req.body.suhu_setpoint),
+        keruh_setpoint: parseFloat(req.body.keruh_setpoint),
+        kp_suhu: parseFloat(req.body.kp_suhu || 0),
+        ki_suhu: parseFloat(req.body.ki_suhu || 0),
+        kd_suhu: parseFloat(req.body.kd_suhu || 0),
+        kp_keruh: parseFloat(req.body.kp_keruh || 0),
+        ki_keruh: parseFloat(req.body.ki_keruh || 0),
+        kd_keruh: parseFloat(req.body.kd_keruh || 0),
+        adc_jernih: req.body.adc_jernih ? parseInt(req.body.adc_jernih) : undefined,
+        adc_keruh: req.body.adc_keruh ? parseInt(req.body.adc_keruh) : undefined
+    };
+
+    // Hapus undefined
+    Object.keys(cleanPayload).forEach(key => cleanPayload[key] === undefined && delete cleanPayload[key]);
+
+    const payload = JSON.stringify(cleanPayload);
+
+    // 3. Kirim ke MQTT dengan RETAIN: TRUE
+    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, payload, { qos: 1, retain: true }, (err) => {
+      if (err) console.error('[MQTT] Publish error:', err);
+      else console.log('[MQTT] Control sent to ESP32:', payload);
     });
+
+    // 4. Kirim ke Frontend Debug Terminal
+    io.emit('debugLog', { type: 'CONTROL', data: cleanPayload });
+
+    res.json({ success: true, data: updated });
+    
   } catch (error) {
     console.error('[API] Control update error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// New route: POST /api/calibration (khusus untuk kalibrasi sensor)
+// [MODIFIKASI] Route Calibration
 app.post('/api/calibration', async (req, res) => {
   try {
     console.log('[API] ===== Calibration Update Request =====');
-    console.log('[API] Calibration data:', req.body);
-    
     const { adc_jernih, adc_keruh } = req.body;
     
-    // Validasi
     if (!adc_jernih || !adc_keruh) {
       return res.status(400).json({ error: 'adc_jernih and adc_keruh are required' });
     }
     
-    if (adc_jernih === adc_keruh) {
-      return res.status(400).json({ error: 'adc_jernih and adc_keruh must be different' });
-    }
-    
-    // Update database (hanya field ADC)
+    // Update DB
     const updated = await Control.findOneAndUpdate(
       {},
-      { 
-        $set: { 
-          adc_jernih: parseInt(adc_jernih),
-          adc_keruh: parseInt(adc_keruh)
-        }
-      },
-      { 
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true
-      }
+      { $set: { adc_jernih: parseInt(adc_jernih), adc_keruh: parseInt(adc_keruh) } },
+      { upsert: true, new: true }
     );
     
-    console.log('[API] ✅ Calibration updated in DB');
-    
-    // Publish HANYA nilai ADC ke MQTT
-    const mqttPayload = {
+    // Siapkan Payload Bersih
+    const cleanPayload = {
       adc_jernih: parseInt(adc_jernih),
       adc_keruh: parseInt(adc_keruh)
     };
     
-    const payloadStr = JSON.stringify(mqttPayload);
-    console.log('[MQTT] Publishing calibration:', payloadStr);
+    const payloadStr = JSON.stringify(cleanPayload);
     
-    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, payloadStr, { qos: 1 }, (err) => {
-      if (err) {
-        console.error('[MQTT] ❌ Publish error:', err);
-        return res.status(500).json({ error: 'MQTT publish failed' });
-      }
-      console.log('[MQTT] ✅ Calibration sent to ESP32');
-      console.log('[API] ========================================\n');
-      res.json({ 
-        success: true, 
-        message: 'Calibration updated successfully',
-        data: {
-          adc_jernih: updated.adc_jernih,
-          adc_keruh: updated.adc_keruh
-        }
-      });
-    });
+    // Kirim MQTT (Retain)
+    mqttClient.publish(CONFIG.MQTT_TOPIC_MODE, payloadStr, { qos: 1, retain: true });
+    
+    // Kirim Frontend Debug
+    io.emit('debugLog', { type: 'CALIB', data: cleanPayload });
+
+    console.log('[MQTT] Calibration sent:', payloadStr);
+    res.json({ success: true, data: updated });
     
   } catch (error) {
     console.error('[API] ❌ Calibration error:', error);
@@ -270,7 +284,7 @@ app.post('/api/calibration', async (req, res) => {
   }
 });
 
-// Export data CSV (VERSI BARU DENGAN RENTANG WAKTU)
+// ... (Export CSV Route Asli Anda) ...
 app.get('/api/export/csv/range', async (req, res) => {
   try {
     const { start, end } = req.query;
@@ -286,14 +300,13 @@ app.get('/api/export/csv/range', async (req, res) => {
       return res.status(400).json({ error: 'Invalid date format.' });
     }
 
-    // Cari data di database berdasarkan rentang timestamp
     const data = await ResearchData.find({
       timestamp: {
         $gte: startDate,
         $lte: endDate
       }
     })
-    .sort({ timestamp: 1 }) // Urutkan dari lama ke baru
+    .sort({ timestamp: 1 }) 
     .lean();
     
     if (data.length === 0) {
@@ -316,12 +329,11 @@ app.get('/api/export/csv/range', async (req, res) => {
       csv += `${row.pwm_pompa || 0}\n`;
     });
     
-    // Buat nama file yang dinamis
     const fileName = `aquarium_data_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}.csv`;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.send('\uFEFF' + csv); // \uFEFF untuk encoding Excel
+    res.send('\uFEFF' + csv); 
 
   } catch (error) {
     console.error('[API] Export CSV error:', error);

@@ -1,19 +1,19 @@
 const mongoose = require('mongoose');
 
 const controlSchema = new mongoose.Schema({
-  kontrol_aktif: String,    // Mode kontrol: "Fuzzy" atau "PID"
+  kontrol_aktif: { type: String, default: "Fuzzy" },    // Mode kontrol: "Fuzzy" atau "PID"
 
   // --- Parameter Kontrol Suhu ---
-  suhu_setpoint: Number,    // Setpoint suhu target
-  kp_suhu: Number,          // Gain Proporsional untuk suhu
-  ki_suhu: Number,          // Gain Integral untuk suhu
-  kd_suhu: Number,          // Gain Derivatif untuk suhu
+  suhu_setpoint: { type: Number, default: 28.0 },    // Setpoint suhu target
+  kp_suhu: { type: Number, default: 8.0 },          // Gain Proporsional untuk suhu
+  ki_suhu: { type: Number, default: 0.3 },          // Gain Integral untuk suhu
+  kd_suhu: { type: Number, default: 6.0 },          // Gain Derivatif untuk suhu
 
   // --- Parameter Kontrol Kekeruhan ---
-  keruh_setpoint: Number,   // Setpoint kekeruhan target (%)
-  kp_keruh: Number,         // Gain Proporsional untuk kekeruhan
-  ki_keruh: Number,         // Gain Integral untuk kekeruhan
-  kd_keruh: Number,         // Gain Derivatif untuk kekeruhan
+  keruh_setpoint: { type: Number, default: 10.0 },   // Setpoint kekeruhan target (%)
+  kp_keruh: { type: Number, default: 5.0 },         // Gain Proporsional untuk kekeruhan
+  ki_keruh: { type: Number, default: 0.3 },         // Gain Integral untuk kekeruhan
+  kd_keruh: { type: Number, default: 2.0 },         // Gain Derivatif untuk kekeruhan
 
   // Kalibrasi ADC (TAMBAHKAN DEFAULT VALUE!)
   adc_jernih: { type: Number, default: 9475 },
