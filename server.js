@@ -154,6 +154,59 @@ mqttClient.on('error', (error) => {
 });
 
 // =========================================================================
+// [TAMBAHAN] API HISTORY DATA (JSON)
+// =========================================================================
+// [MODIFIKASI] API HISTORY DATA (Support 'hours' ATAU 'start' & 'end')
+app.get('/api/history', async (req, res) => {
+  try {
+    const { hours, start, end } = req.query;
+    
+    let startTime, endTime;
+
+    // Logika Pemilihan Waktu
+    if (start && end) {
+        // Jika User pilih Custom Range
+        startTime = new Date(start);
+        endTime = new Date(end);
+    } else {
+        // Jika User pilih Shortcut (1 jam / 6 jam)
+        // Default 1 jam jika tidak ada parameter
+        const limitHours = parseInt(hours) || 1; 
+        endTime = new Date();
+        startTime = new Date();
+        startTime.setHours(endTime.getHours() - limitHours);
+    }
+
+    // Validasi
+    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        return res.status(400).json({ error: 'Format tanggal tidak valid' });
+    }
+
+    // Ambil data dari MongoDB
+    const data = await ResearchData.find({
+      timestamp: { $gte: startTime, $lte: endTime }
+    })
+    .sort({ timestamp: 1 }) // Urutkan Lama -> Baru
+    .lean();
+
+    const chartData = data.map(d => ({
+      time: new Date(d.timestamp).toLocaleTimeString('id-ID', { hour12: false }), 
+      temp: d.suhu,
+      turb: d.turbidity_persen,
+      set_temp: d.setpoint_suhu, 
+      set_turb: d.setpoint_keruh,
+      mode: d.kontrol_aktif || 'Unknown'
+    }));
+
+    res.json(chartData);
+
+  } catch (error) {
+    console.error('[API] History Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =========================================================================
 //                API ROUTES
 // =========================================================================
 

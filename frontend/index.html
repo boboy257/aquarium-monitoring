@@ -126,7 +126,35 @@
           </div>
         </div>
       </div>
-
+      <!-- Fitur data historis -->
+      <div class="card p-4 mb-4 flex flex-col lg:flex-row justify-between items-center gap-4 shadow-sm">
+        <div class="flex items-center gap-2">
+          <i data-lucide="history" class="w-5 h-5 text-blue-600"></i>
+          <span class="font-bold text-gray-700 text-sm sm:text-base">Mode Grafik:</span>
+        </div>
+      
+        <div class="flex flex-wrap items-center gap-2 justify-center lg:justify-end w-full">
+          <select id="chartTimeRange" onchange="handleTimeRangeChange()"
+            class="p-2 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+            <option value="live">🔴 Live Stream</option>
+            <option value="1">⏱️ 1 Jam Terakhir</option>
+            <option value="6">⏱️ 6 Jam Terakhir</option>
+            <option value="custom">📅 Pilih Tanggal Sendiri...</option>
+          </select>
+      
+          <div id="customDateInputs" class="hidden flex flex-wrap items-center gap-2">
+            <input type="datetime-local" id="chartStartDate" class="p-1.5 border rounded text-sm text-gray-600">
+            <span class="text-gray-400">-</span>
+            <input type="datetime-local" id="chartEndDate" class="p-1.5 border rounded text-sm text-gray-600">
+      
+            <button onclick="loadCustomHistory()"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm font-bold transition shadow-sm flex items-center gap-1">
+              <i data-lucide="search" class="w-3 h-3"></i> Load
+            </button>
+          </div>
+        </div>
+      </div><!-- Fitur data historis -->
+ 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
       
         <div class="card p-4 sm:p-6">

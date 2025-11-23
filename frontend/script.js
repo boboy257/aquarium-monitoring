@@ -25,6 +25,7 @@ let state = {
   chartTurb: null,
   socket: null,
   dataBuffer: [],
+  isLiveMode: true,
   isConnected: false,
   lastDataTime: Date.now(), // Untuk Watchdog
   watchdogInterval: null,
@@ -197,7 +198,7 @@ function processNewData(data) {
             el.classList.add(item.color);
         }
     });
-  }
+  } 
 
   // --- B. UPDATE KARTU UTAMA ---
   const els = {
@@ -217,21 +218,23 @@ function processNewData(data) {
   if (els.adc && data.turbidity_adc !== undefined) els.adc.textContent = data.turbidity_adc;
 
   // --- C. BUFFER DATA GRAFIK ---
-  const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  
-  state.dataBuffer.push({
-    time: timeStr,
-    temp: data.suhu || 0,
-    turb: data.turbidity_persen || 0
-  });
+  if (state.isLiveMode) {
+      const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      state.dataBuffer.push({
+        time: timeStr,
+        temp: data.suhu || 0,
+        turb: data.turbidity_persen || 0,
+        mode: data.kontrol_aktif || 'Unknown'
+      });
 
-  if (state.dataBuffer.length > CONFIG.MAX_DATA_POINTS) {
-    state.dataBuffer.shift();
+      if (state.dataBuffer.length > CONFIG.MAX_DATA_POINTS) {
+        state.dataBuffer.shift();
+      }
+
+    updateCharts();
   }
-
-  updateCharts();
 }
-
 // =========================================================================
 // 6. CHART MANAGEMENT (ZOOM & PAN ENABLED)
 // =========================================================================
@@ -243,7 +246,26 @@ function initCharts() {
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: { position: 'top', labels: { boxWidth: 12, padding: 10 } },
-      tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, cornerRadius: 8 },
+      tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, cornerRadius: 8 ,
+        callbacks: {
+              label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                      label += ': ';
+                  }
+                  if (context.parsed.y !== null) {
+                      label += context.parsed.y;
+                  }
+                  
+                  // Tooltip Mode Info
+                  if (context.dataset.modes && context.dataset.modes[context.dataIndex]) {
+                      const currentMode = context.dataset.modes[context.dataIndex];
+                      label += ` [${currentMode}]`; 
+                  }
+                  return label;
+              }
+          }
+      },
       // --- KONFIGURASI ZOOM ---
       zoom: {
         pan: {
@@ -280,7 +302,22 @@ function initCharts() {
             borderWidth: 2,
             tension: 0.4,
             fill: true,
-            pointRadius: 0 // Titik hilang agar rapi, muncul saat hover
+            pointRadius: 0, // Titik hilang agar rapi, muncul saat hover
+
+            segment: {
+              backgroundColor: (ctx) => {
+                // Ambil dataset dari chart instance
+                const dataset = ctx.chart.data.datasets[ctx.datasetIndex];
+                const index = ctx.p0DataIndex;
+                // Cek apakah modes ada (Safe check)
+                const mode = (dataset && dataset.modes) ? dataset.modes[index] : 'Unknown';
+                
+                // Jika PID = Ungu Transparan, Jika Fuzzy = Biru Transparan (Default)
+                return mode === 'PID' 
+                  ? 'rgba(192, 132, 252, 0.5)'  // Ungu PID
+                  : 'rgba(59, 130, 246, 0.2)';  // Biru Fuzzy (Default)
+              }
+            }
           },
           {
             label: 'Setpoint',
@@ -315,7 +352,19 @@ function initCharts() {
             borderWidth: 2,
             tension: 0.4,
             fill: true,
-            pointRadius: 0
+            pointRadius: 0,
+
+            segment: {
+              backgroundColor: (ctx) => {
+                const dataset = ctx.chart.data.datasets[ctx.datasetIndex];
+                const index = ctx.p0DataIndex;
+                const mode = (dataset && dataset.modes) ? dataset.modes[index] : 'Unknown';
+                // Jika PID = Ungu Transparan, Jika Fuzzy = Orange Transparan
+                return mode === 'PID' 
+                  ? 'rgba(192, 132, 252, 0.5)'  // Ungu PID
+                  : 'rgba(245, 158, 11, 0.2)';  // Orange Fuzzy
+              }
+            }
           },
           {
             label: 'Setpoint',
@@ -341,17 +390,24 @@ function updateCharts() {
   const labels = state.dataBuffer.map(d => d.time);
   const tempData = state.dataBuffer.map(d => d.temp);
   const turbData = state.dataBuffer.map(d => d.turb);
+  const currentModes = state.dataBuffer.map(d => d.mode);
 
   // Update Chart Suhu
   state.chartTemp.data.labels = labels;
   state.chartTemp.data.datasets[0].data = tempData;
-  state.chartTemp.data.datasets[1].data = Array(tempData.length).fill(state.setpoints.temp);
+  state.chartTemp.data.datasets[0].modes = currentModes;
+  if (state.chartTemp.data.datasets[1]) {
+      state.chartTemp.data.datasets[1].data = Array(tempData.length).fill(state.setpoints.temp);
+  }
   state.chartTemp.update('none'); // 'none' = update tanpa animasi berat
 
   // Update Chart Turbidity
   state.chartTurb.data.labels = labels;
   state.chartTurb.data.datasets[0].data = turbData;
-  state.chartTurb.data.datasets[1].data = Array(turbData.length).fill(state.setpoints.turb);
+  state.chartTurb.data.datasets[0].modes = currentModes;
+  if (state.chartTurb.data.datasets[1]) {
+      state.chartTurb.data.datasets[1].data = Array(turbData.length).fill(state.setpoints.turb);
+  }
   state.chartTurb.update('none');
 }
 
@@ -688,3 +744,113 @@ setInterval(() => {
         logToTerminal(lastKnownControlSettings, 'CONTROL');
     }
 }, 5000); // <-- Ubah 5000 jadi 3000 jika ingin lebih cepat (3 detik)
+
+// =========================================================================
+// [TAMBAHAN] 12. LOGIKA HISTORY CHART (MAX 6 JAM)
+// =========================================================================
+function handleTimeRangeChange() {
+  const range = document.getElementById('chartTimeRange').value;
+  const customInputs = document.getElementById('customDateInputs');
+
+  // 1. Jika Mode LIVE
+  if (range === 'live') {
+    state.isLiveMode = true;
+    state.dataBuffer = []; 
+    customInputs.classList.add('hidden'); // Sembunyikan input tanggal
+    
+    if (state.chartTemp) state.chartTemp.resetZoom();
+    if (state.chartTurb) state.chartTurb.resetZoom();
+    
+    showNotification('Kembali ke Mode Live Stream', 'info');
+    return;
+  }
+
+  // 2. Jika Mode CUSTOM
+  if (range === 'custom') {
+    state.isLiveMode = false; 
+    customInputs.classList.remove('hidden'); // Tampilkan input tanggal
+    
+    // Set default value input (1 jam terakhir) biar user gampang edit
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    document.getElementById('chartEndDate').value = formatDateForInput(now);
+    document.getElementById('chartStartDate').value = formatDateForInput(oneHourAgo);
+    
+    return; // Tunggu user tekan tombol Load
+  }
+
+  // 3. Jika Mode PRESET (1 Jam / 6 Jam)
+  state.isLiveMode = false;
+  customInputs.classList.add('hidden');
+  loadHistoryByUrl(`${CONFIG.API_BASE}/api/history?hours=${range}`);
+}
+
+// [BARU] Fungsi dipanggil saat tombol "Load" ditekan
+function loadCustomHistory() {
+  const startVal = document.getElementById('chartStartDate').value;
+  const endVal = document.getElementById('chartEndDate').value;
+
+  if (!startVal || !endVal) {
+    return showNotification('Harap isi Tanggal Mulai dan Selesai!', 'warning');
+  }
+
+  if (new Date(startVal) >= new Date(endVal)) {
+    return showNotification('Tanggal Mulai harus lebih awal dari Selesai!', 'warning');
+  }
+
+  // Panggil API dengan parameter start & end
+  const url = `${CONFIG.API_BASE}/api/history?start=${new Date(startVal).toISOString()}&end=${new Date(endVal).toISOString()}`;
+  loadHistoryByUrl(url);
+}
+
+// [HELPER BARU] Fungsi generik untuk fetch dan update chart
+async function loadHistoryByUrl(url) {
+  showNotification('Memuat data history...', 'info');
+
+  try {
+    const res = await fetch(url);
+    const historyData = await res.json();
+
+    if (!historyData || historyData.length === 0) {
+      showNotification('Data tidak ditemukan di rentang ini', 'warning');
+      return;
+    }
+
+    const pointColors = historyData.map(d => d.mode === 'PID' ? '#c084fc' : '#4ade80');
+    const modes = historyData.map(d => d.mode);
+
+    // Update Chart Suhu
+    state.chartTemp.data.labels = historyData.map(d => d.time);
+    state.chartTemp.data.datasets[0].data = historyData.map(d => d.temp);
+    // Masukkan Warna & Mode ke Dataset Suhu
+    state.chartTemp.data.datasets[0].pointBackgroundColor = pointColors;
+    state.chartTemp.data.datasets[0].pointBorderColor = pointColors;
+    state.chartTemp.data.datasets[0].modes = modes;
+    if(state.chartTemp.data.datasets[1]) {
+       state.chartTemp.data.datasets[1].data = historyData.map(d => d.set_temp);
+       state.chartTemp.data.datasets[1].pointRadius = 0;
+    }
+    state.chartTemp.update();
+    state.chartTemp.resetZoom(); 
+
+    // Update Chart Turbidity
+    state.chartTurb.data.labels = historyData.map(d => d.time);
+    state.chartTurb.data.datasets[0].data = historyData.map(d => d.turb);
+    // Masukkan Warna & Mode ke Dataset Kekeruhan
+    state.chartTurb.data.datasets[0].pointBackgroundColor = pointColors;
+    state.chartTurb.data.datasets[0].pointBorderColor = pointColors;
+    state.chartTurb.data.datasets[0].modes = modes;
+    if(state.chartTurb.data.datasets[1]) {
+       state.chartTurb.data.datasets[1].data = historyData.map(d => d.set_turb);
+       state.chartTurb.data.datasets[1].pointRadius = 0;
+    }
+    state.chartTurb.update();
+    state.chartTurb.resetZoom();
+
+    showNotification(`Berhasil memuat ${historyData.length} data`, 'success');
+
+  } catch (error) {
+    console.error(error);
+    showNotification('Gagal mengambil data history', 'error');
+  }
+}
