@@ -1,5 +1,5 @@
 /**
- * AQUARIUM RESEARCH DASHBOARD
+ * AQUARIUM RESEARCH DASHBOARD - DARK THEME
  * Complete Logic: Real-time, Control, Calibration, Zoom, & Watchdog
  */
 
@@ -7,19 +7,20 @@
 // 1. CONFIG & GLOBAL STATE
 // =========================================================================
 const CONFIG = {
-  API_BASE: window.location.origin, // Otomatis deteksi host (localhost:3000)
-  MAX_DATA_POINTS: 50,              // Jumlah data di grafik
+  API_BASE: window.location.origin,
+  MAX_DATA_POINTS: 50,
   RECONNECT_DELAY: 2000,
   TIMEOUT: 20000,
-  WATCHDOG_THRESHOLD: 30000,         // 30 Detik tanpa data = Sensor Mati
+  WATCHDOG_THRESHOLD: 30000,
   COLORS: {
-    temp: 'rgb(59, 130, 246)',      // Blue
-    turb: 'rgb(245, 158, 11)',      // Amber
-    setpoint: 'rgba(255, 0, 0, 1)'  // Red Dotted
+    temp: 'rgb(96, 165, 250)',        // Light Blue for dark theme
+    turb: 'rgb(251, 191, 36)',        // Amber for dark theme
+    setpoint: 'rgba(34, 211, 238, 1)', // Cyan
+    gridColor: 'rgba(56, 189, 248, 0.1)',
+    textColor: '#e2e8f0'
   }
 };
 
-// State Variables
 let state = {
   chartTemp: null,
   chartTurb: null,
@@ -27,7 +28,7 @@ let state = {
   dataBuffer: [],
   isLiveMode: true,
   isConnected: false,
-  lastDataTime: Date.now(), // Untuk Watchdog
+  lastDataTime: Date.now(),
   watchdogInterval: null,
   setpoints: {
     temp: 28.0,
@@ -46,15 +47,15 @@ function formatNumber(num, decimals = 2) {
 
 function showNotification(message, type = 'info') {
   const colors = {
-    success: 'bg-green-500',
-    error: 'bg-red-500',
-    info: 'bg-blue-500',
-    warning: 'bg-amber-500'
+    success: 'bg-gradient-to-r from-green-500 to-emerald-600',
+    error: 'bg-gradient-to-r from-red-500 to-red-600',
+    info: 'bg-gradient-to-r from-cyan-500 to-blue-600',
+    warning: 'bg-gradient-to-r from-amber-500 to-orange-600'
   };
   const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
 
   const notif = document.createElement('div');
-  notif.className = `notification ${colors[type]} text-white px-6 py-4 rounded-lg shadow-xl flex items-center space-x-3 max-w-md transition-all duration-300 fixed top-5 right-5 z-[9999] translate-x-full`;
+  notif.className = `notification ${colors[type]} text-white px-6 py-4 rounded-lg shadow-2xl flex items-center space-x-3 max-w-md transition-all duration-300 fixed top-5 right-5 z-[9999] translate-x-full border border-white/20`;
   notif.innerHTML = `
     <span class="text-xl font-bold">${icons[type]}</span>
     <span class="font-medium">${message}</span>
@@ -62,14 +63,12 @@ function showNotification(message, type = 'info') {
 
   document.body.appendChild(notif);
 
-  // Animasi Masuk
   requestAnimationFrame(() => {
     notif.style.transform = 'translateX(0)';
   });
 
-  // Hapus Otomatis
   setTimeout(() => {
-    notif.style.transform = 'translateX(120%)'; // Slide out
+    notif.style.transform = 'translateX(120%)';
     setTimeout(() => notif.remove(), 300);
   }, 3000);
 }
@@ -79,11 +78,11 @@ function updateConnectionStatus(connected) {
   const statusEl = document.getElementById('connection-status');
   
   const config = connected 
-    ? { bg: 'bg-green-100', dot: 'bg-green-500', text: 'text-green-700', label: 'Connected' }
-    : { bg: 'bg-red-100', dot: 'bg-red-500', text: 'text-red-700', label: 'Disconnected' };
+    ? { bg: 'bg-green-500/20', dot: 'bg-green-400', text: 'text-green-300', label: 'Connected' }
+    : { bg: 'bg-red-500/20', dot: 'bg-red-500', text: 'text-red-300', label: 'Disconnected' };
 
   if (statusEl) {
-    statusEl.className = `flex items-center space-x-2 px-3 py-1.5 rounded-full ${config.bg} w-full sm:w-auto justify-center transition-colors duration-300`;
+    statusEl.className = `flex items-center space-x-2 px-3 py-1.5 rounded-full ${config.bg} w-full sm:w-auto justify-center transition-colors duration-300 border border-${connected ? 'green' : 'red'}-500/30`;
     statusEl.innerHTML = `
       <span class="w-2 h-2 ${config.dot} rounded-full ${connected ? '' : 'animate-pulse'}"></span>
       <span class="text-xs font-medium ${config.text}">${config.label}</span>
@@ -97,7 +96,7 @@ function formatDateForInput(date) {
 }
 
 // =========================================================================
-// 3. WATCHDOG TIMER (DETEKSI SENSOR MATI)
+// 3. WATCHDOG TIMER
 // =========================================================================
 function startWatchdog() {
   if (state.watchdogInterval) clearInterval(state.watchdogInterval);
@@ -107,28 +106,24 @@ function startWatchdog() {
     const timeDiff = now - state.lastDataTime;
     const alertEl = document.getElementById('sensor-watchdog-alert');
     
-    // Jika tidak ada data > 5 detik
     if (timeDiff > CONFIG.WATCHDOG_THRESHOLD) {
       if (alertEl && alertEl.classList.contains('hidden')) {
-        // Tampilkan Banner
         alertEl.classList.remove('hidden');
         console.warn(`[Watchdog] ⚠️ SENSOR DEAD! No data for ${Math.floor(timeDiff/1000)}s`);
         
-        // Ubah tampilan nilai jadi "LOST" merah
         const ids = ['current-temp', 'current-turb', 'current-pwm-heater', 'current-pwm-pump', 'live-adc-value'];
         ids.forEach(id => {
             const el = document.getElementById(id);
             if(el) {
-                el.dataset.prevVal = el.textContent; // Simpan nilai lama
+                el.dataset.prevVal = el.textContent;
                 el.textContent = "LOST";
-                el.classList.add('text-red-500', 'animate-pulse');
-                // Hapus warna asli sementara
-                el.classList.remove('text-blue-600', 'text-amber-600', 'text-green-600', 'text-red-600', 'text-purple-600'); 
+                el.classList.add('text-red-500', 'animate-pulse', 'font-bold');
+                el.classList.remove('text-blue-400', 'text-amber-400', 'text-green-400', 'text-red-400', 'text-purple-400', 'stat-glow'); 
             }
         });
       }
     }
-  }, 1000); // Cek setiap 1 detik
+  }, 1000);
 }
 
 // =========================================================================
@@ -159,7 +154,6 @@ function connectSocket() {
 
   state.socket.on('debugLog', (packet) => {
     if (packet.type === 'CONTROL') {
-        // [TAMBAHAN] Update variabel global jika ada perubahan baru
         lastKnownControlSettings = packet.data;
     }
     logToTerminal(packet.data, packet.type);
@@ -167,40 +161,36 @@ function connectSocket() {
 }
 
 // =========================================================================
-// 5. DATA PROCESSING (UI UPDATE)
+// 5. DATA PROCESSING
 // =========================================================================
 function processNewData(data) {
   if (!data) return;
 
   logToTerminal(data, 'DATA');
 
-  // --- A. RESET WATCHDOG ---
   state.lastDataTime = Date.now();
   
-  // Sembunyikan Alert Banner jika muncul
   const alertEl = document.getElementById('sensor-watchdog-alert');
   if (alertEl && !alertEl.classList.contains('hidden')) {
     alertEl.classList.add('hidden');
     showNotification('Koneksi Sensor Pulih', 'success');
     
-    // Reset style elemen (Hapus merah/LOST)
     const ids = [
-        {id: 'current-temp', color: 'text-blue-600'},
-        {id: 'current-turb', color: 'text-amber-600'},
-        {id: 'current-pwm-heater', color: 'text-red-600'},
-        {id: 'current-pwm-pump', color: 'text-purple-600'},
-        {id: 'live-adc-value', color: 'text-blue-600'}
+        {id: 'current-temp', color: 'text-blue-400'},
+        {id: 'current-turb', color: 'text-amber-400'},
+        {id: 'current-pwm-heater', color: 'text-red-400'},
+        {id: 'current-pwm-pump', color: 'text-purple-400'},
+        {id: 'live-adc-value', color: 'text-blue-400'}
     ];
     ids.forEach(item => {
         const el = document.getElementById(item.id);
         if(el) {
-            el.classList.remove('text-red-500', 'animate-pulse');
-            el.classList.add(item.color);
+            el.classList.remove('text-red-400', 'animate-pulse');
+            el.classList.add(item.color, 'stat-glow');
         }
     });
-  } 
+  }
 
-  // --- B. UPDATE KARTU UTAMA ---
   const els = {
     temp: document.getElementById('current-temp'),
     turb: document.getElementById('current-turb'),
@@ -217,7 +207,6 @@ function processNewData(data) {
   if (els.pump) els.pump.textContent = `${formatNumber(data.pwm_pompa, 1)}%`;
   if (els.adc && data.turbidity_adc !== undefined) els.adc.textContent = data.turbidity_adc;
 
-  // --- C. BUFFER DATA GRAFIK ---
   if (state.isLiveMode) {
       const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       
@@ -235,58 +224,81 @@ function processNewData(data) {
     updateCharts();
   }
 }
+
 // =========================================================================
-// 6. CHART MANAGEMENT (ZOOM & PAN ENABLED)
+// 6. CHART MANAGEMENT
 // =========================================================================
 function initCharts() {
-  // Opsi Umum Grafik
   const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: { position: 'top', labels: { boxWidth: 12, padding: 10 } },
-      tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, cornerRadius: 8 ,
-        callbacks: {
-              label: function(context) {
-                  let label = context.dataset.label || '';
-                  if (label) {
-                      label += ': ';
-                  }
-                  if (context.parsed.y !== null) {
-                      label += context.parsed.y;
-                  }
-                  
-                  // Tooltip Mode Info
-                  if (context.dataset.modes && context.dataset.modes[context.dataIndex]) {
-                      const currentMode = context.dataset.modes[context.dataIndex];
-                      label += ` [${currentMode}]`; 
-                  }
-                  return label;
-              }
-          }
+      legend: { 
+        position: 'top', 
+        labels: { 
+          boxWidth: 12, 
+          padding: 10,
+          color: CONFIG.COLORS.textColor 
+        } 
       },
-      // --- KONFIGURASI ZOOM ---
+      tooltip: { 
+        backgroundColor: 'rgba(15, 29, 53, 0.95)',
+        titleColor: '#38bdf8',
+        bodyColor: '#e2e8f0',
+        borderColor: 'rgba(56, 189, 248, 0.3)',
+        borderWidth: 1,
+        padding: 12, 
+        cornerRadius: 8,
+        callbacks: {
+          label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) {
+                  label += ': ';
+              }
+              if (context.parsed.y !== null) {
+                  label += context.parsed.y;
+              }
+              
+              if (context.dataset.modes && context.dataset.modes[context.dataIndex]) {
+                  const currentMode = context.dataset.modes[context.dataIndex];
+                  label += ` [${currentMode}]`; 
+              }
+              return label;
+          }
+        }
+      },
       zoom: {
         pan: {
           enabled: true,
-          mode: 'x', // Hanya geser horizontal (Waktu)
+          mode: 'x',
         },
         zoom: {
-          wheel: { enabled: true }, // Scroll mouse
-          pinch: { enabled: true }, // Cubit layar HP
+          wheel: { enabled: true },
+          pinch: { enabled: true },
           mode: 'x',
         }
       }
     },
     scales: {
-      x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
-      y: { grid: { color: '#f1f5f9' } }
+      x: { 
+        ticks: { 
+          maxRotation: 0, 
+          autoSkip: true, 
+          maxTicksLimit: 6,
+          color: CONFIG.COLORS.textColor 
+        },
+        grid: { color: CONFIG.COLORS.gridColor }
+      },
+      y: { 
+        grid: { color: CONFIG.COLORS.gridColor },
+        ticks: { color: CONFIG.COLORS.textColor }
+      }
     },
-    animation: false // Matikan animasi agar performa tinggi
+    animation: false
   };
 
-  // 1. CHART SUHU
+  // Temperature Chart
   const ctxTemp = document.getElementById('chartTemp');
   if (ctxTemp) {
     state.chartTemp = new Chart(ctxTemp.getContext('2d'), {
@@ -298,24 +310,19 @@ function initCharts() {
             label: 'Suhu (°C)',
             data: [],
             borderColor: CONFIG.COLORS.temp,
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            backgroundColor: 'rgba(96, 165, 250, 0.1)',
             borderWidth: 2,
             tension: 0.4,
             fill: true,
-            pointRadius: 0, // Titik hilang agar rapi, muncul saat hover
-
+            pointRadius: 0,
             segment: {
               backgroundColor: (ctx) => {
-                // Ambil dataset dari chart instance
                 const dataset = ctx.chart.data.datasets[ctx.datasetIndex];
                 const index = ctx.p0DataIndex;
-                // Cek apakah modes ada (Safe check)
                 const mode = (dataset && dataset.modes) ? dataset.modes[index] : 'Unknown';
-                
-                // Jika PID = Ungu Transparan, Jika Fuzzy = Biru Transparan (Default)
                 return mode === 'PID' 
-                  ? 'rgba(192, 132, 252, 0.5)'  // Ungu PID
-                  : 'rgba(59, 130, 246, 0.2)';  // Biru Fuzzy (Default)
+                  ? 'rgba(34, 211, 238, 0.25)'
+                  : 'rgba(96, 165, 250, 0.15)';
               }
             }
           },
@@ -331,12 +338,19 @@ function initCharts() {
       },
       options: {
         ...commonOptions,
-        scales: { ...commonOptions.scales, y: { min: 20, max: 35 } } // Range Suhu Akuarium
+        scales: { 
+          ...commonOptions.scales, 
+          y: { 
+            ...commonOptions.scales.y,
+            min: 20, 
+            max: 35 
+          } 
+        }
       }
     });
   }
 
-  // 2. CHART KEKERUHAN
+  // Turbidity Chart
   const ctxTurb = document.getElementById('chartTurb');
   if (ctxTurb) {
     state.chartTurb = new Chart(ctxTurb.getContext('2d'), {
@@ -348,21 +362,19 @@ function initCharts() {
             label: 'Kekeruhan (%)',
             data: [],
             borderColor: CONFIG.COLORS.turb,
-            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            backgroundColor: 'rgba(251, 191, 36, 0.1)',
             borderWidth: 2,
             tension: 0.4,
             fill: true,
             pointRadius: 0,
-
             segment: {
               backgroundColor: (ctx) => {
                 const dataset = ctx.chart.data.datasets[ctx.datasetIndex];
                 const index = ctx.p0DataIndex;
                 const mode = (dataset && dataset.modes) ? dataset.modes[index] : 'Unknown';
-                // Jika PID = Ungu Transparan, Jika Fuzzy = Orange Transparan
                 return mode === 'PID' 
-                  ? 'rgba(192, 132, 252, 0.5)'  // Ungu PID
-                  : 'rgba(245, 158, 11, 0.2)';  // Orange Fuzzy
+                  ? 'rgba(251, 191, 36, 1)'
+                  : 'rgba(251, 191, 36, 0.2)';
               }
             }
           },
@@ -378,7 +390,14 @@ function initCharts() {
       },
       options: {
         ...commonOptions,
-        scales: { ...commonOptions.scales, y: { min: 0, max: 100 } }
+        scales: { 
+          ...commonOptions.scales, 
+          y: { 
+            ...commonOptions.scales.y,
+            min: 0, 
+            max: 100 
+          } 
+        }
       }
     });
   }
@@ -392,16 +411,14 @@ function updateCharts() {
   const turbData = state.dataBuffer.map(d => d.turb);
   const currentModes = state.dataBuffer.map(d => d.mode);
 
-  // Update Chart Suhu
   state.chartTemp.data.labels = labels;
   state.chartTemp.data.datasets[0].data = tempData;
   state.chartTemp.data.datasets[0].modes = currentModes;
   if (state.chartTemp.data.datasets[1]) {
       state.chartTemp.data.datasets[1].data = Array(tempData.length).fill(state.setpoints.temp);
   }
-  state.chartTemp.update('none'); // 'none' = update tanpa animasi berat
+  state.chartTemp.update('none');
 
-  // Update Chart Turbidity
   state.chartTurb.data.labels = labels;
   state.chartTurb.data.datasets[0].data = turbData;
   state.chartTurb.data.datasets[0].modes = currentModes;
@@ -411,7 +428,6 @@ function updateCharts() {
   state.chartTurb.update('none');
 }
 
-// Fungsi Reset Zoom (Dipanggil oleh tombol HTML)
 function resetZoomChart(type) {
   if (type === 'temp' && state.chartTemp) {
     state.chartTemp.resetZoom();
@@ -436,10 +452,9 @@ async function loadControlSettings() {
     }, 1500);
 
     console.group("🔌 [LOAD] Pengaturan Kontrol dari Server");
-    console.table(data); // Menampilkan data rapi dalam bentuk tabel
+    console.table(data);
     console.groupEnd();
 
-    // Isi Form
     const els = {
       mode: document.getElementById('control-mode'),
       tempSp: document.getElementById('control-temp-sp'),
@@ -458,20 +473,19 @@ async function loadControlSettings() {
     if (els.tempSp) els.tempSp.value = data.suhu_setpoint || 28.0;
     if (els.turbSp) els.turbSp.value = data.keruh_setpoint || 10.0;
 
-    // Trigger perubahan mode (untuk hide/show PID params)
     if (els.mode) els.mode.dispatchEvent(new Event('change'));
 
-    // Isi PID params jika ada
     if (els.kpTemp) els.kpTemp.value = data.kp_suhu || 0;
     if (els.kiTemp) els.kiTemp.value = data.ki_suhu || 0;
     if (els.kdTemp) els.kdTemp.value = data.kd_suhu || 0;
-    // ... (lainnya sesuai kebutuhan)
 
-    // Isi Kalibrasi
+    if (els.kpTurb) els.kpTurb.value = data.kp_keruh || 0;
+    if (els.kiTurb) els.kiTurb.value = data.ki_keruh || 0;
+    if (els.kdTurb) els.kdTurb.value = data.kd_keruh || 0;
+    
     if (data.adc_jernih && els.adcJernih) els.adcJernih.value = data.adc_jernih;
     if (data.adc_keruh && els.adcKeruh) els.adcKeruh.value = data.adc_keruh;
 
-    // Update Setpoint Lokal
     state.setpoints.temp = parseFloat(data.suhu_setpoint) || 28.0;
     state.setpoints.turb = parseFloat(data.keruh_setpoint) || 10.0;
 
@@ -497,7 +511,6 @@ async function updateControl() {
     keruh_setpoint: turbSp
   };
 
-  // Jika PID, masukkan parameter PID
   if (mode === 'PID') {
     payload.kp_suhu = parseFloat(document.getElementById('control-kp-temp').value) || 0;
     payload.ki_suhu = parseFloat(document.getElementById('control-ki-temp').value) || 0;
@@ -555,7 +568,7 @@ async function uploadCalibration() {
 
     if (!res.ok) throw new Error('Gagal upload');
 
-    statusEl.innerHTML = '<span class="text-green-600 font-semibold">Tersimpan ✓</span>';
+    statusEl.innerHTML = '<span class="text-green-400 font-semibold">Tersimpan ✓</span>';
     document.getElementById('calib-last-update').textContent = `Update: ${new Date().toLocaleTimeString()}`;
     showNotification('Kalibrasi Berhasil!', 'success');
 
@@ -564,7 +577,7 @@ async function uploadCalibration() {
     }, 3000);
 
   } catch (error) {
-    statusEl.innerHTML = '<span class="text-red-600 font-semibold">Gagal ✗</span>';
+    statusEl.innerHTML = '<span class="text-red-400 font-semibold">Gagal ✗</span>';
     showNotification('Gagal upload kalibrasi', 'error');
   }
 }
@@ -581,13 +594,12 @@ function openExportModal() {
   const modal = document.getElementById('export-modal');
   if (modal) {
     const end = new Date();
-    const start = new Date(end.getTime() - (60 * 60 * 1000)); // 1 jam lalu
+    const start = new Date(end.getTime() - (60 * 60 * 1000));
     
     document.getElementById('export-start-time').value = formatDateForInput(start);
     document.getElementById('export-end-time').value = formatDateForInput(end);
     
     modal.classList.remove('hidden');
-    // Animasi masuk (opsional)
     setTimeout(() => modal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 10);
   }
 }
@@ -623,38 +635,10 @@ function downloadRangedCSV() {
 }
 
 // =========================================================================
-// 10. INITIALIZATION
-// =========================================================================
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('[App] Initializing...');
-
-  initCharts();
-  connectSocket();
-  loadControlSettings();
-  startWatchdog(); // Jalankan deteksi sensor mati
-
-  // Listener Toggle PID/Fuzzy
-  const modeSelect = document.getElementById('control-mode');
-  const pidParams = document.getElementById('pid-params-control');
-  if (modeSelect && pidParams) {
-    modeSelect.addEventListener('change', (e) => {
-      if (e.target.value === 'PID') {
-        pidParams.classList.remove('hidden');
-      } else {
-        pidParams.classList.add('hidden');
-      }
-    });
-  }
-
-  // Init Icons
-  if (window.lucide) window.lucide.createIcons();
-});
-
-// =========================================================================
-// 11. DEBUG CONSOLE LOGIC (NEW FEATURE)
+// 10. DEBUG CONSOLE
 // =========================================================================
 const debugState = {
-  maxLogs: 50, // Batas log biar browser tidak berat
+  maxLogs: 50,
   isVisible: false
 };
 
@@ -671,47 +655,41 @@ function toggleDebugConsole() {
 
 function clearDebugConsole() {
   const container = document.getElementById('debug-log-container');
-  container.innerHTML = '<div class="opacity-50 italic">Log cleared. Waiting for data...</div>';
+  container.innerHTML = '<div class="opacity-50 italic text-cyan-500/50">> Log cleared. Waiting for data...</div>';
 }
 
 function logToTerminal(data, type = 'DATA') {
-  // Hanya proses jika terminal dibuka (untuk performa)
-  // Hapus "if (!debugState.isVisible) return;" jika ingin log tetap jalan di background
-  
   const container = document.getElementById('debug-log-container');
   if (!container) return;
 
   const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
   const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
   
-  // Format JSON biar berwarna (Syntax Highlighting sederhana)
   let jsonString = JSON.stringify(data);
   
-  // Mewarnai Key dan Value (Regex sederhana)
   jsonString = jsonString.replace(/"([^"]+)":/g, '<span class="log-key">"$1":</span>');
   jsonString = jsonString.replace(/:([0-9.]+)/g, ':<span class="log-num">$1</span>');
   jsonString = jsonString.replace(/:("[^"]+")/g, ':<span class="log-val">$1</span>');
   jsonString = jsonString.replace(/:(true|false)/g, ':<span class="log-bool">$1</span>');
 
-  // Warna Label & Border
   let labelColor = '#4ade80'; 
-  let borderColor = '#4ade80'; // Default Hijau
+  let borderColor = '#4ade80';
 
   if (type === 'CONTROL') {
-      labelColor = '#c084fc'; borderColor = '#c084fc'; // Ungu
+      labelColor = '#c084fc'; borderColor = '#c084fc';
   } else if (type === 'CALIB') {
-      labelColor = '#facc15'; borderColor = '#facc15'; // Kuning
+      labelColor = '#facc15'; borderColor = '#facc15';
   } else if (type === 'AUTO-FIX') {
-      labelColor = '#f87171'; borderColor = '#f87171'; // Merah
+      labelColor = '#f87171'; borderColor = '#f87171';
   }
+
   const entry = document.createElement('div');
-  // Inline Styles
   entry.style.borderLeft = `4px solid ${borderColor}`;
   entry.style.paddingLeft = '8px';
   entry.style.marginBottom = '4px';
   entry.style.fontFamily = 'monospace';
   entry.style.fontSize = '12px';
-  entry.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+  entry.style.backgroundColor = 'rgba(56, 189, 248, 0.05)';
 
   entry.innerHTML = `
     <span class="log-time">[${time}]</span> 
@@ -725,38 +703,30 @@ function logToTerminal(data, type = 'DATA') {
       container.scrollTop = container.scrollHeight;
   }
 
-  // Bersihkan log lama
   while (container.children.length > debugState.maxLogs) {
     container.removeChild(container.firstChild);
   }
 }
 
-// =======================================================
-// [TAMBAHAN] GLOBAL VARIABLE UNTUK MENYIMPAN SETTINGAN TERAKHIR
-// =======================================================
 let lastKnownControlSettings = null;
 
-// Timer untuk menampilkan ulang data Control setiap 5 detik
-// Agar tidak "tenggelam" oleh data sensor
 setInterval(() => {
     if (lastKnownControlSettings) {
-        // Tampilkan lagi di terminal
         logToTerminal(lastKnownControlSettings, 'CONTROL');
     }
-}, 5000); // <-- Ubah 5000 jadi 3000 jika ingin lebih cepat (3 detik)
+}, 5000);
 
 // =========================================================================
-// [TAMBAHAN] 12. LOGIKA HISTORY CHART (MAX 6 JAM)
+// 11. HISTORY CHART LOGIC
 // =========================================================================
 function handleTimeRangeChange() {
   const range = document.getElementById('chartTimeRange').value;
   const customInputs = document.getElementById('customDateInputs');
 
-  // 1. Jika Mode LIVE
   if (range === 'live') {
     state.isLiveMode = true;
     state.dataBuffer = []; 
-    customInputs.classList.add('hidden'); // Sembunyikan input tanggal
+    customInputs.classList.add('hidden');
     
     if (state.chartTemp) state.chartTemp.resetZoom();
     if (state.chartTurb) state.chartTurb.resetZoom();
@@ -765,27 +735,23 @@ function handleTimeRangeChange() {
     return;
   }
 
-  // 2. Jika Mode CUSTOM
   if (range === 'custom') {
     state.isLiveMode = false; 
-    customInputs.classList.remove('hidden'); // Tampilkan input tanggal
+    customInputs.classList.remove('hidden');
     
-    // Set default value input (1 jam terakhir) biar user gampang edit
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     document.getElementById('chartEndDate').value = formatDateForInput(now);
     document.getElementById('chartStartDate').value = formatDateForInput(oneHourAgo);
     
-    return; // Tunggu user tekan tombol Load
+    return;
   }
 
-  // 3. Jika Mode PRESET (1 Jam / 6 Jam)
   state.isLiveMode = false;
   customInputs.classList.add('hidden');
   loadHistoryByUrl(`${CONFIG.API_BASE}/api/history?hours=${range}`);
 }
 
-// [BARU] Fungsi dipanggil saat tombol "Load" ditekan
 function loadCustomHistory() {
   const startVal = document.getElementById('chartStartDate').value;
   const endVal = document.getElementById('chartEndDate').value;
@@ -798,12 +764,10 @@ function loadCustomHistory() {
     return showNotification('Tanggal Mulai harus lebih awal dari Selesai!', 'warning');
   }
 
-  // Panggil API dengan parameter start & end
   const url = `${CONFIG.API_BASE}/api/history?start=${new Date(startVal).toISOString()}&end=${new Date(endVal).toISOString()}`;
   loadHistoryByUrl(url);
 }
 
-// [HELPER BARU] Fungsi generik untuk fetch dan update chart
 async function loadHistoryByUrl(url) {
   showNotification('Memuat data history...', 'info');
 
@@ -819,10 +783,8 @@ async function loadHistoryByUrl(url) {
     const pointColors = historyData.map(d => d.mode === 'PID' ? '#c084fc' : '#4ade80');
     const modes = historyData.map(d => d.mode);
 
-    // Update Chart Suhu
     state.chartTemp.data.labels = historyData.map(d => d.time);
     state.chartTemp.data.datasets[0].data = historyData.map(d => d.temp);
-    // Masukkan Warna & Mode ke Dataset Suhu
     state.chartTemp.data.datasets[0].pointBackgroundColor = pointColors;
     state.chartTemp.data.datasets[0].pointBorderColor = pointColors;
     state.chartTemp.data.datasets[0].modes = modes;
@@ -833,10 +795,8 @@ async function loadHistoryByUrl(url) {
     state.chartTemp.update();
     state.chartTemp.resetZoom(); 
 
-    // Update Chart Turbidity
     state.chartTurb.data.labels = historyData.map(d => d.time);
     state.chartTurb.data.datasets[0].data = historyData.map(d => d.turb);
-    // Masukkan Warna & Mode ke Dataset Kekeruhan
     state.chartTurb.data.datasets[0].pointBackgroundColor = pointColors;
     state.chartTurb.data.datasets[0].pointBorderColor = pointColors;
     state.chartTurb.data.datasets[0].modes = modes;
@@ -854,3 +814,29 @@ async function loadHistoryByUrl(url) {
     showNotification('Gagal mengambil data history', 'error');
   }
 }
+
+// =========================================================================
+// 12. INITIALIZATION
+// =========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[App] Initializing...');
+
+  initCharts();
+  connectSocket();
+  loadControlSettings();
+  startWatchdog();
+
+  const modeSelect = document.getElementById('control-mode');
+  const pidParams = document.getElementById('pid-params-control');
+  if (modeSelect && pidParams) {
+    modeSelect.addEventListener('change', (e) => {
+      if (e.target.value === 'PID') {
+        pidParams.classList.remove('hidden');
+      } else {
+        pidParams.classList.add('hidden');
+      }
+    });
+  }
+
+  if (window.lucide) window.lucide.createIcons();
+});

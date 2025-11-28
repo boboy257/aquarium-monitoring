@@ -9,10 +9,129 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #f8fafc;
+    background: linear-gradient(135deg, #0a1628 0%, #1a2b4a 50%, #0f1d35 100%);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
-/* Animasi Pulse untuk Status Koneksi */
+/* Konten utama push footer ke bawah */
+.content-layer {
+    flex: 1;
+    /* TAMBAH INI */
+}
+
+/* Animated Water Bubbles Background */
+.bubble {
+    position: fixed;
+    bottom: -100px;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.3) 0%, rgba(14, 165, 233, 0.1) 70%);
+    border-radius: 50%;
+    opacity: 0.6;
+    animation: rise linear infinite;
+    z-index: 0;
+    pointer-events: none;
+}
+
+@keyframes rise {
+    to {
+        bottom: 110%;
+        transform: translateX(var(--drift)) scale(0.5);
+        opacity: 0;
+    }
+}
+
+.bubble:nth-child(1) {
+    left: 10%;
+    width: 40px;
+    height: 40px;
+    animation-duration: 12s;
+    --drift: -30px;
+}
+
+.bubble:nth-child(2) {
+    left: 25%;
+    width: 60px;
+    height: 60px;
+    animation-duration: 15s;
+    --drift: 40px;
+    animation-delay: 2s;
+}
+
+.bubble:nth-child(3) {
+    left: 45%;
+    width: 30px;
+    height: 30px;
+    animation-duration: 10s;
+    --drift: -20px;
+    animation-delay: 4s;
+}
+
+.bubble:nth-child(4) {
+    left: 65%;
+    width: 50px;
+    height: 50px;
+    animation-duration: 14s;
+    --drift: 30px;
+    animation-delay: 1s;
+}
+
+.bubble:nth-child(5) {
+    left: 80%;
+    width: 45px;
+    height: 45px;
+    animation-duration: 13s;
+    --drift: -35px;
+    animation-delay: 3s;
+}
+
+.bubble:nth-child(6) {
+    left: 90%;
+    width: 35px;
+    height: 35px;
+    animation-duration: 11s;
+    --drift: 25px;
+    animation-delay: 5s;
+}
+
+/* Glass Effect for Cards */
+.glass-card {
+    background: rgba(15, 29, 53, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(56, 189, 248, 0.1);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: visible;
+}
+
+.glass-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.1) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.5s;
+    pointer-events: none;
+}
+
+.glass-card:hover::before {
+    opacity: 1;
+}
+
+.glass-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(56, 189, 248, 0.2);
+    border-color: rgba(56, 189, 248, 0.4);
+}
+
+/* Pulse Animation */
 .pulse-dot {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -29,42 +148,46 @@ body {
     }
 }
 
-/* Notifikasi Toast */
-.notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 9999;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-    transition: all 0.3s ease-out;
-    transform: translateX(400px);
-    /* Default hidden state */
+/* Glow Effect for Stats */
+.stat-glow {
+    text-shadow: 0 0 10px currentColor;
+    animation: glow 2s ease-in-out infinite;
 }
 
-/* Card Styling */
-.card {
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: box-shadow 0.3s;
+@keyframes glow {
+
+    0%,
+    100% {
+        filter: brightness(1);
+    }
+
+    50% {
+        filter: brightness(1.3);
+    }
 }
 
-.card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
 }
 
-/* Form Elements */
-input:focus,
-select:focus,
-textarea:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(15, 29, 53, 0.5);
+    border-radius: 4px;
 }
 
-/* Custom Button */
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.3);
+    border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(56, 189, 248, 0.5);
+}
+
+/* Button Styles */
 .btn-primary {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
     color: white;
     font-weight: 600;
     padding: 0.75rem 1.5rem;
@@ -72,49 +195,77 @@ textarea:focus {
     border: none;
     cursor: pointer;
     transition: all 0.3s;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn-primary:hover::before {
+    width: 300px;
+    height: 300px;
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    box-shadow: 0 6px 20px rgba(14, 165, 233, 0.6);
 }
 
-.btn-primary:active {
-    transform: translateY(0);
+/* Input & Select - Dark Theme */
+input,
+select,
+textarea {
+    background: rgba(15, 29, 53, 0.6) !important;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #e2e8f0 !important;
+    transition: all 0.3s;
 }
 
-/* --- DEBUG TERMINAL STYLES --- */
-.custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
+/* Option dropdown */
+select option {
+    background: #0f1d35;
+    color: #e2e8f0;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: #1e1e1e;
+/* Focus state */
+input:focus,
+select:focus,
+textarea:focus {
+    background: rgba(15, 29, 53, 0.8) !important;
+    border-color: #0ea5e9;
+    color: #e2e8f0 !important;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #4b5563;
-    border-radius: 4px;
+/* Modal Overlay */
+.modal-overlay {
+    backdrop-filter: blur(5px);
+    background: rgba(0, 0, 0, 0.7);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
+/* Notification */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 0 20px rgba(14, 165, 233, 0.3);
+    transition: all 0.3s ease-out;
+    transform: translateX(400px);
 }
 
-.log-entry {
-    border-left: 2px solid transparent;
-    padding-left: 8px;
-    margin-bottom: 4px;
-    font-family: 'Consolas', 'Monaco', monospace;
-    animation: fadeIn 0.2s ease-in;
-}
-
-.log-entry:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-}
-
-/* Syntax Highlighting Colors (VS Code Style) */
+/* Debug Terminal */
 .log-time {
     color: #6b7280;
     margin-right: 8px;
@@ -126,48 +277,37 @@ textarea:focus {
     color: #9cdcfe;
 }
 
-/* Biru Muda */
 .log-val {
     color: #ce9178;
 }
 
-/* Merah Bata/String */
 .log-num {
     color: #b5cea8;
 }
 
-/* Hijau Muda/Angka */
 .log-bool {
     color: #569cd6;
 }
 
-/* Biru/Boolean */
-
-/* Label Type Colors */
 .label-DATA {
     color: #4ade80;
     font-weight: bold;
 }
 
-/* Green */
 .label-CONTROL {
     color: #c084fc;
     font-weight: bold;
 }
 
-/* Purple */
 .label-CALIB {
     color: #facc15;
     font-weight: bold;
 }
 
-/* Yellow */
 .label-AUTO-FIX {
     color: #f87171;
     font-weight: bold;
 }
-
-/* Red */
 
 @keyframes fadeIn {
     from {
@@ -179,4 +319,33 @@ textarea:focus {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Wave Animation for Alert */
+@keyframes wave {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+.animate-wave {
+    animation: wave 1s ease-in-out infinite;
+}
+
+/* Content Layer */
+.content-layer {
+    position: relative;
+    z-index: 1;
+}
+
+/* Icon kalender datetime-local */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
 }

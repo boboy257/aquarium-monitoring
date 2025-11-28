@@ -17,7 +17,6 @@ const CONFIG = {
   MQTT_BROKER: 'mqtt://broker.hivemq.com',
   MQTT_TOPIC_DATA: 'unhas/informatika/aquarium/data',
   MQTT_TOPIC_MODE: 'unhas/informatika/aquarium/mode',
-  MQTT_TOPIC_METRICS: 'unhas/informatika/aquarium/metrics' // Topic ini tidak akan terpakai lagi
 };
 
 const app = express();
