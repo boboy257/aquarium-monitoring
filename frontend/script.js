@@ -1,6 +1,6 @@
 /**
- * AQUARIUM RESEARCH DASHBOARD - DARK THEME
- * Complete Logic: Real-time, Control, Calibration, Zoom, & Watchdog
+ * AQUARIUM RESEARCH DASHBOARD - DUAL THEME
+ * Complete Logic: Real-time, Control, Calibration, Zoom, Watchdog & Theme Toggle
  */
 
 // =========================================================================
@@ -13,11 +13,11 @@ const CONFIG = {
   TIMEOUT: 20000,
   WATCHDOG_THRESHOLD: 30000,
   COLORS: {
-    temp: 'rgb(96, 165, 250)',        // Light Blue for dark theme
-    turb: 'rgb(251, 191, 36)',        // Amber for dark theme
-    setpoint: 'rgba(34, 211, 238, 1)', // Cyan
-    gridColor: 'rgba(56, 189, 248, 0.1)',
-    textColor: '#e2e8f0'
+    temp: null,        // Will be set dynamically
+    turb: null,        // Will be set dynamically
+    setpoint: null,    // Will be set dynamically
+    gridColor: null,
+    textColor: null
   }
 };
 
@@ -33,13 +33,104 @@ let state = {
   setpoints: {
     temp: 28.0,
     turb: 10.0
-  }
+  },
+  currentTheme: 'light'  // Default theme
 };
 
 // =========================================================================
-// 2. UTILITY FUNCTIONS
+// 2. THEME SYSTEM
 // =========================================================================
+function updateChartColors() {
+  const isDark = state.currentTheme === 'dark';
+  
+  CONFIG.COLORS = {
+    temp: isDark ? 'rgb(96, 165, 250)' : 'rgb(59, 130, 246)',
+    turb: isDark ? 'rgb(251, 191, 36)' : 'rgb(245, 158, 11)',
+    setpoint: 'rgba(34, 211, 238, 1)',
+    gridColor: isDark ? 'rgba(56, 189, 248, 0.1)' : 'rgba(14, 165, 233, 0.08)',
+    textColor: isDark ? '#e2e8f0' : '#334155'
+  };
+}
 
+function toggleTheme() {
+  const body = document.body;
+  const themeIcon = document.querySelector('#theme-toggle i');
+  
+  // Toggle theme
+  if (state.currentTheme === 'light') {
+    body.classList.remove('light-theme');
+    body.classList.add('dark-theme');
+    state.currentTheme = 'dark';
+    if (themeIcon) themeIcon.setAttribute('data-lucide', 'moon');
+  } else {
+    body.classList.remove('dark-theme');
+    body.classList.add('light-theme');
+    state.currentTheme = 'light';
+    if (themeIcon) themeIcon.setAttribute('data-lucide', 'sun');
+  }
+  
+  // Refresh icons
+  if (window.lucide) window.lucide.createIcons();
+  
+  // Update chart colors
+  updateChartColors();
+  
+  // Update existing charts
+  // Update existing charts (CEK NULL DULU!)
+  if (state.chartTemp && state.chartTemp.options) {
+    state.chartTemp.options.plugins.legend.labels.color = CONFIG.COLORS.textColor;
+    updateChartTheme(state.chartTemp);
+    state.chartTemp.update();
+  }
+  if (state.chartTurb && state.chartTurb.options) {
+    state.chartTurb.options.plugins.legend.labels.color = CONFIG.COLORS.textColor;
+    updateChartTheme(state.chartTurb);
+    state.chartTurb.update();
+  }
+  
+  // Save preference
+  localStorage.setItem('aquarium-theme', state.currentTheme);
+  
+  showNotification(`Tema ${state.currentTheme === 'dark' ? 'Gelap' : 'Terang'} diaktifkan`, 'success');
+}
+
+function updateChartTheme(chart) {
+  // Update colors
+  chart.data.datasets[0].borderColor = CONFIG.COLORS.temp || CONFIG.COLORS.turb;
+  chart.data.datasets[0].backgroundColor = state.currentTheme === 'dark' 
+    ? (chart === state.chartTemp ? 'rgba(96, 165, 250, 0.1)' : 'rgba(251, 191, 36, 0.1)')
+    : (chart === state.chartTemp ? 'rgba(59, 130, 246, 0.1)' : 'rgba(245, 158, 11, 0.1)');
+  
+  // Update grid & text colors
+  chart.options.scales.x.grid.color = CONFIG.COLORS.gridColor;
+  chart.options.scales.y.grid.color = CONFIG.COLORS.gridColor;
+  chart.options.scales.x.ticks.color = CONFIG.COLORS.textColor;
+  chart.options.scales.y.ticks.color = CONFIG.COLORS.textColor;
+  chart.options.plugins.legend.labels.color = CONFIG.COLORS.textColor;
+  chart.options.plugins.tooltip.backgroundColor = state.currentTheme === 'dark' 
+    ? 'rgba(15, 29, 53, 0.95)' 
+    : 'rgba(255, 255, 255, 0.95)';
+  chart.options.plugins.tooltip.titleColor = state.currentTheme === 'dark' ? '#38bdf8' : '#0ea5e9';
+  chart.options.plugins.tooltip.bodyColor = CONFIG.COLORS.textColor;
+}
+
+function loadThemePreference() {
+  const savedTheme = localStorage.getItem('aquarium-theme');
+  if (savedTheme === 'dark') {
+    document.body.classList.remove('light-theme');
+    document.body.classList.add('dark-theme');
+    state.currentTheme = 'dark';
+    const themeIcon = document.querySelector('#theme-toggle i');
+    if (themeIcon) {
+      themeIcon.setAttribute('data-lucide', 'moon');
+    }
+  }
+  updateChartColors();
+}
+
+// =========================================================================
+// 3. UTILITY FUNCTIONS
+// =========================================================================
 function formatNumber(num, decimals = 2) {
   if (num === null || num === undefined || isNaN(num)) return '--';
   return Number(num).toFixed(decimals);
@@ -78,11 +169,11 @@ function updateConnectionStatus(connected) {
   const statusEl = document.getElementById('connection-status');
   
   const config = connected 
-    ? { bg: 'bg-green-500/20', dot: 'bg-green-400', text: 'text-green-300', label: 'Connected' }
-    : { bg: 'bg-red-500/20', dot: 'bg-red-500', text: 'text-red-300', label: 'Disconnected' };
+    ? { bg: 'bg-green-500/20', dot: 'bg-green-400', text: 'text-green-600', label: 'Connected' }
+    : { bg: 'bg-red-500/20', dot: 'bg-red-500', text: 'text-red-600', label: 'Disconnected' };
 
   if (statusEl) {
-    statusEl.className = `flex items-center space-x-2 px-3 py-1.5 rounded-full ${config.bg} w-full sm:w-auto justify-center transition-colors duration-300 border border-${connected ? 'green' : 'red'}-500/30`;
+    statusEl.className = `flex items-center space-x-2 px-3 py-1.5 rounded-full ${config.bg} border border-${connected ? 'green' : 'red'}-500/30 transition-colors duration-300`;
     statusEl.innerHTML = `
       <span class="w-2 h-2 ${config.dot} rounded-full ${connected ? '' : 'animate-pulse'}"></span>
       <span class="text-xs font-medium ${config.text}">${config.label}</span>
@@ -96,7 +187,7 @@ function formatDateForInput(date) {
 }
 
 // =========================================================================
-// 3. WATCHDOG TIMER
+// 4. WATCHDOG TIMER
 // =========================================================================
 function startWatchdog() {
   if (state.watchdogInterval) clearInterval(state.watchdogInterval);
@@ -118,7 +209,7 @@ function startWatchdog() {
                 el.dataset.prevVal = el.textContent;
                 el.textContent = "LOST";
                 el.classList.add('text-red-500', 'animate-pulse', 'font-bold');
-                el.classList.remove('text-blue-400', 'text-amber-400', 'text-green-400', 'text-red-400', 'text-purple-400', 'stat-glow'); 
+                el.classList.remove('stat-glow'); 
             }
         });
       }
@@ -127,7 +218,7 @@ function startWatchdog() {
 }
 
 // =========================================================================
-// 4. SOCKET.IO CONNECTION
+// 5. SOCKET.IO CONNECTION
 // =========================================================================
 function connectSocket() {
   console.log('[Socket] Connecting...');
@@ -161,7 +252,7 @@ function connectSocket() {
 }
 
 // =========================================================================
-// 5. DATA PROCESSING
+// 6. DATA PROCESSING
 // =========================================================================
 function processNewData(data) {
   if (!data) return;
@@ -175,18 +266,12 @@ function processNewData(data) {
     alertEl.classList.add('hidden');
     showNotification('Koneksi Sensor Pulih', 'success');
     
-    const ids = [
-        {id: 'current-temp', color: 'text-blue-400'},
-        {id: 'current-turb', color: 'text-amber-400'},
-        {id: 'current-pwm-heater', color: 'text-red-400'},
-        {id: 'current-pwm-pump', color: 'text-purple-400'},
-        {id: 'live-adc-value', color: 'text-blue-400'}
-    ];
-    ids.forEach(item => {
-        const el = document.getElementById(item.id);
+    const ids = ['current-temp', 'current-turb', 'current-pwm-heater', 'current-pwm-pump', 'live-adc-value'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
         if(el) {
-            el.classList.remove('text-red-400', 'animate-pulse');
-            el.classList.add(item.color, 'stat-glow');
+            el.classList.remove('text-red-500', 'animate-pulse', 'font-bold');
+            el.classList.add('stat-glow');
         }
     });
   }
@@ -226,7 +311,7 @@ function processNewData(data) {
 }
 
 // =========================================================================
-// 6. CHART MANAGEMENT
+// 7. CHART MANAGEMENT
 // =========================================================================
 function initCharts() {
   const commonOptions = {
@@ -239,14 +324,17 @@ function initCharts() {
         labels: { 
           boxWidth: 12, 
           padding: 10,
-          color: CONFIG.COLORS.textColor 
+          color: CONFIG.COLORS.textColor,
+          font: {
+            family: 'Inter'
+          }
         } 
       },
       tooltip: { 
-        backgroundColor: 'rgba(15, 29, 53, 0.95)',
-        titleColor: '#38bdf8',
-        bodyColor: '#e2e8f0',
-        borderColor: 'rgba(56, 189, 248, 0.3)',
+        backgroundColor: state.currentTheme === 'dark' ? 'rgba(15, 29, 53, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        titleColor: state.currentTheme === 'dark' ? '#38bdf8' : '#0ea5e9',
+        bodyColor: CONFIG.COLORS.textColor,
+        borderColor: state.currentTheme === 'dark' ? 'rgba(56, 189, 248, 0.3)' : 'rgba(14, 165, 233, 0.3)',
         borderWidth: 1,
         padding: 12, 
         cornerRadius: 8,
@@ -310,7 +398,7 @@ function initCharts() {
             label: 'Suhu (°C)',
             data: [],
             borderColor: CONFIG.COLORS.temp,
-            backgroundColor: 'rgba(96, 165, 250, 0.1)',
+            backgroundColor: state.currentTheme === 'dark' ? 'rgba(96, 165, 250, 0.1)' : 'rgba(59, 130, 246, 0.1)',
             borderWidth: 2,
             tension: 0.4,
             fill: true,
@@ -321,8 +409,8 @@ function initCharts() {
                 const index = ctx.p0DataIndex;
                 const mode = (dataset && dataset.modes) ? dataset.modes[index] : 'Unknown';
                 return mode === 'PID' 
-                  ? 'rgba(34, 211, 238, 0.25)'
-                  : 'rgba(96, 165, 250, 0.15)';
+                  ? 'rgba(168, 85, 247, 0.15)'
+                  : (state.currentTheme === 'dark' ? 'rgba(96, 165, 250, 0.15)' : 'rgba(59, 130, 246, 0.15)');
               }
             }
           },
@@ -362,7 +450,7 @@ function initCharts() {
             label: 'Kekeruhan (%)',
             data: [],
             borderColor: CONFIG.COLORS.turb,
-            backgroundColor: 'rgba(251, 191, 36, 0.1)',
+            backgroundColor: state.currentTheme === 'dark' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(245, 158, 11, 0.1)',
             borderWidth: 2,
             tension: 0.4,
             fill: true,
@@ -373,8 +461,8 @@ function initCharts() {
                 const index = ctx.p0DataIndex;
                 const mode = (dataset && dataset.modes) ? dataset.modes[index] : 'Unknown';
                 return mode === 'PID' 
-                  ? 'rgba(251, 191, 36, 1)'
-                  : 'rgba(251, 191, 36, 0.2)';
+                  ? 'rgba(168, 85, 247, 0.15)'
+                  : (state.currentTheme === 'dark' ? 'rgba(251, 191, 36, 0.15)' : 'rgba(245, 158, 11, 0.15)');
               }
             }
           },
@@ -437,7 +525,7 @@ function resetZoomChart(type) {
 }
 
 // =========================================================================
-// 7. CONTROL LOGIC
+// 8. CONTROL LOGIC
 // =========================================================================
 async function loadControlSettings() {
   try {
@@ -478,11 +566,10 @@ async function loadControlSettings() {
     if (els.kpTemp) els.kpTemp.value = data.kp_suhu || 0;
     if (els.kiTemp) els.kiTemp.value = data.ki_suhu || 0;
     if (els.kdTemp) els.kdTemp.value = data.kd_suhu || 0;
-
     if (els.kpTurb) els.kpTurb.value = data.kp_keruh || 0;
     if (els.kiTurb) els.kiTurb.value = data.ki_keruh || 0;
     if (els.kdTurb) els.kdTurb.value = data.kd_keruh || 0;
-    
+
     if (data.adc_jernih && els.adcJernih) els.adcJernih.value = data.adc_jernih;
     if (data.adc_keruh && els.adcKeruh) els.adcKeruh.value = data.adc_keruh;
 
@@ -541,7 +628,7 @@ async function updateControl() {
 }
 
 // =========================================================================
-// 8. CALIBRATION LOGIC
+// 9. CALIBRATION LOGIC
 // =========================================================================
 async function uploadCalibration() {
   const adcJernih = parseInt(document.getElementById('calib-adc-jernih').value);
@@ -568,7 +655,7 @@ async function uploadCalibration() {
 
     if (!res.ok) throw new Error('Gagal upload');
 
-    statusEl.innerHTML = '<span class="text-green-400 font-semibold">Tersimpan ✓</span>';
+    statusEl.innerHTML = '<span class="text-green-600 font-semibold">Tersimpan ✓</span>';
     document.getElementById('calib-last-update').textContent = `Update: ${new Date().toLocaleTimeString()}`;
     showNotification('Kalibrasi Berhasil!', 'success');
 
@@ -577,7 +664,7 @@ async function uploadCalibration() {
     }, 3000);
 
   } catch (error) {
-    statusEl.innerHTML = '<span class="text-red-400 font-semibold">Gagal ✗</span>';
+    statusEl.innerHTML = '<span class="text-red-600 font-semibold">Gagal ✗</span>';
     showNotification('Gagal upload kalibrasi', 'error');
   }
 }
@@ -588,7 +675,7 @@ function resetCalibration() {
 }
 
 // =========================================================================
-// 9. EXPORT LOGIC
+// 10. EXPORT LOGIC
 // =========================================================================
 function openExportModal() {
   const modal = document.getElementById('export-modal');
@@ -635,7 +722,7 @@ function downloadRangedCSV() {
 }
 
 // =========================================================================
-// 10. DEBUG CONSOLE
+// 11. DEBUG CONSOLE
 // =========================================================================
 const debugState = {
   maxLogs: 50,
@@ -645,7 +732,7 @@ const debugState = {
 function toggleDebugConsole() {
   const wrapper = document.getElementById('debug-console-wrapper');
   debugState.isVisible = !debugState.isVisible;
-  
+
   if (debugState.isVisible) {
     wrapper.classList.remove('hidden');
   } else {
@@ -655,7 +742,7 @@ function toggleDebugConsole() {
 
 function clearDebugConsole() {
   const container = document.getElementById('debug-log-container');
-  container.innerHTML = '<div class="opacity-50 italic text-cyan-500/50">> Log cleared. Waiting for data...</div>';
+  container.innerHTML = '<div class="opacity-50 italic text-subtext">> Log cleared. Waiting for data...</div>';
 }
 
 function logToTerminal(data, type = 'DATA') {
@@ -663,24 +750,28 @@ function logToTerminal(data, type = 'DATA') {
   if (!container) return;
 
   const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
-  const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
+  const time = new Date().toLocaleTimeString('id-ID', {
+    hour12: false
+  });
   
   let jsonString = JSON.stringify(data);
-  
   jsonString = jsonString.replace(/"([^"]+)":/g, '<span class="log-key">"$1":</span>');
   jsonString = jsonString.replace(/:([0-9.]+)/g, ':<span class="log-num">$1</span>');
   jsonString = jsonString.replace(/:("[^"]+")/g, ':<span class="log-val">$1</span>');
   jsonString = jsonString.replace(/:(true|false)/g, ':<span class="log-bool">$1</span>');
 
-  let labelColor = '#4ade80'; 
+  let labelColor = '#4ade80';
   let borderColor = '#4ade80';
 
   if (type === 'CONTROL') {
-      labelColor = '#c084fc'; borderColor = '#c084fc';
+    labelColor = '#c084fc';
+    borderColor = '#c084fc';
   } else if (type === 'CALIB') {
-      labelColor = '#facc15'; borderColor = '#facc15';
+    labelColor = '#facc15';
+    borderColor = '#facc15';
   } else if (type === 'AUTO-FIX') {
-      labelColor = '#f87171'; borderColor = '#f87171';
+    labelColor = '#f87171';
+    borderColor = '#f87171';
   }
 
   const entry = document.createElement('div');
@@ -689,18 +780,18 @@ function logToTerminal(data, type = 'DATA') {
   entry.style.marginBottom = '4px';
   entry.style.fontFamily = 'monospace';
   entry.style.fontSize = '12px';
-  entry.style.backgroundColor = 'rgba(56, 189, 248, 0.05)';
-
+  entry.style.backgroundColor = state.currentTheme === 'dark' ? 'rgba(56, 189, 248, 0.05)' : 'rgba(14, 165, 233, 0.05)';
+  
   entry.innerHTML = `
-    <span class="log-time">[${time}]</span> 
-    <span class="label-${type}">[${type}]</span> 
-    <span style="color: #d4d4d4;">${jsonString}</span>
+    <span class="log-time">[${time}]</span>
+    <span class="label-${type}">[${type}]</span>
+    <span style="color: ${state.currentTheme === 'dark' ? '#d4d4d4' : '#334155'};">${jsonString}</span>
   `;
 
   container.appendChild(entry);
 
   if (isNearBottom) {
-      container.scrollTop = container.scrollHeight;
+    container.scrollTop = container.scrollHeight;
   }
 
   while (container.children.length > debugState.maxLogs) {
@@ -709,15 +800,14 @@ function logToTerminal(data, type = 'DATA') {
 }
 
 let lastKnownControlSettings = null;
-
 setInterval(() => {
-    if (lastKnownControlSettings) {
-        logToTerminal(lastKnownControlSettings, 'CONTROL');
-    }
+  if (lastKnownControlSettings) {
+    logToTerminal(lastKnownControlSettings, 'CONTROL');
+  }
 }, 5000);
 
 // =========================================================================
-// 11. HISTORY CHART LOGIC
+// 12. HISTORY CHART LOGIC
 // =========================================================================
 function handleTimeRangeChange() {
   const range = document.getElementById('chartTimeRange').value;
@@ -725,25 +815,23 @@ function handleTimeRangeChange() {
 
   if (range === 'live') {
     state.isLiveMode = true;
-    state.dataBuffer = []; 
+    state.dataBuffer = [];
     customInputs.classList.add('hidden');
-    
     if (state.chartTemp) state.chartTemp.resetZoom();
     if (state.chartTurb) state.chartTurb.resetZoom();
-    
+
     showNotification('Kembali ke Mode Live Stream', 'info');
     return;
   }
 
   if (range === 'custom') {
-    state.isLiveMode = false; 
+    state.isLiveMode = false;
     customInputs.classList.remove('hidden');
-    
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     document.getElementById('chartEndDate').value = formatDateForInput(now);
     document.getElementById('chartStartDate').value = formatDateForInput(oneHourAgo);
-    
+
     return;
   }
 
@@ -759,22 +847,20 @@ function loadCustomHistory() {
   if (!startVal || !endVal) {
     return showNotification('Harap isi Tanggal Mulai dan Selesai!', 'warning');
   }
-
   if (new Date(startVal) >= new Date(endVal)) {
     return showNotification('Tanggal Mulai harus lebih awal dari Selesai!', 'warning');
   }
-
+  
   const url = `${CONFIG.API_BASE}/api/history?start=${new Date(startVal).toISOString()}&end=${new Date(endVal).toISOString()}`;
   loadHistoryByUrl(url);
 }
 
 async function loadHistoryByUrl(url) {
   showNotification('Memuat data history...', 'info');
-
   try {
     const res = await fetch(url);
     const historyData = await res.json();
-
+    
     if (!historyData || historyData.length === 0) {
       showNotification('Data tidak ditemukan di rentang ini', 'warning');
       return;
@@ -783,32 +869,35 @@ async function loadHistoryByUrl(url) {
     const pointColors = historyData.map(d => d.mode === 'PID' ? '#c084fc' : '#4ade80');
     const modes = historyData.map(d => d.mode);
 
+    // Update Temp Chart
     state.chartTemp.data.labels = historyData.map(d => d.time);
     state.chartTemp.data.datasets[0].data = historyData.map(d => d.temp);
     state.chartTemp.data.datasets[0].pointBackgroundColor = pointColors;
     state.chartTemp.data.datasets[0].pointBorderColor = pointColors;
     state.chartTemp.data.datasets[0].modes = modes;
-    if(state.chartTemp.data.datasets[1]) {
-       state.chartTemp.data.datasets[1].data = historyData.map(d => d.set_temp);
-       state.chartTemp.data.datasets[1].pointRadius = 0;
+    
+    if (state.chartTemp.data.datasets[1]) {
+      state.chartTemp.data.datasets[1].data = historyData.map(d => d.set_temp);
+      state.chartTemp.data.datasets[1].pointRadius = 0;
     }
     state.chartTemp.update();
-    state.chartTemp.resetZoom(); 
+    state.chartTemp.resetZoom();
 
+    // Update Turb Chart
     state.chartTurb.data.labels = historyData.map(d => d.time);
     state.chartTurb.data.datasets[0].data = historyData.map(d => d.turb);
     state.chartTurb.data.datasets[0].pointBackgroundColor = pointColors;
     state.chartTurb.data.datasets[0].pointBorderColor = pointColors;
     state.chartTurb.data.datasets[0].modes = modes;
-    if(state.chartTurb.data.datasets[1]) {
-       state.chartTurb.data.datasets[1].data = historyData.map(d => d.set_turb);
-       state.chartTurb.data.datasets[1].pointRadius = 0;
+    
+    if (state.chartTurb.data.datasets[1]) {
+      state.chartTurb.data.datasets[1].data = historyData.map(d => d.set_turb);
+      state.chartTurb.data.datasets[1].pointRadius = 0;
     }
     state.chartTurb.update();
     state.chartTurb.resetZoom();
 
     showNotification(`Berhasil memuat ${historyData.length} data`, 'success');
-
   } catch (error) {
     console.error(error);
     showNotification('Gagal mengambil data history', 'error');
@@ -816,11 +905,12 @@ async function loadHistoryByUrl(url) {
 }
 
 // =========================================================================
-// 12. INITIALIZATION
+// 13. INITIALIZATION
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[App] Initializing...');
-
+  // Load theme preference first
+  loadThemePreference();
   initCharts();
   connectSocket();
   loadControlSettings();
@@ -828,6 +918,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const modeSelect = document.getElementById('control-mode');
   const pidParams = document.getElementById('pid-params-control');
+
   if (modeSelect && pidParams) {
     modeSelect.addEventListener('change', (e) => {
       if (e.target.value === 'PID') {

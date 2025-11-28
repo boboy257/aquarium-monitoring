@@ -17,11 +17,11 @@
   <script src="https://unpkg.com/lucide@0.423.0"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+
   <link rel="stylesheet" href="style.css">
-  
 </head>
 
-<body>
+<body class="light-theme">
   <!-- Animated Bubbles Background -->
   <div class="bubble"></div>
   <div class="bubble"></div>
@@ -32,7 +32,7 @@
 
   <!-- Sensor Watchdog Alert -->
   <div id="sensor-watchdog-alert"
-    class="hidden fixed top-0 left-0 w-full bg-gradient-to-r from-orange-600 to-red-600 text-white z-[100] shadow-2xl animate-wave">
+    class="hidden fixed top-0 left-0 w-full watchdog-alert text-white z-[100] shadow-2xl animate-wave">
     <div class="container mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="p-2 bg-white/20 rounded-full animate-pulse">
@@ -52,19 +52,28 @@
     <div class="container mx-auto max-w-7xl px-4">
       <div class="flex flex-col sm:flex-row justify-between items-center h-auto sm:h-16 py-3 sm:py-0 gap-3 sm:gap-0">
         <div class="flex items-center space-x-3 w-full sm:w-auto justify-center sm:justify-start">
-          <i data-lucide="microscope" class="w-8 h-8 text-cyan-400 flex-shrink-0"></i>
+          <i data-lucide="microscope" class="w-8 h-8 text-primary flex-shrink-0"></i>
           <div class="text-center sm:text-left">
-            <h1 class="text-lg sm:text-xl font-bold text-cyan-100 leading-tight">Aquarium Research</h1>
-            <p class="text-xs text-cyan-300/70 hidden sm:block">Data Logging Dashboard</p>
+            <h1 class="text-lg sm:text-xl font-bold text-heading leading-tight">Aquarium Research</h1>
+            <p class="text-xs text-subtext hidden sm:block">Data Logging Dashboard</p>
           </div>
         </div>
 
-        <div class="flex items-center justify-center w-full sm:w-auto">
-          <div
-            class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-800/50 w-full sm:w-auto justify-center border border-cyan-500/30"
-            id="connection-status">
-            <span class="pulse-dot w-2 h-2 bg-gray-400 rounded-full"></span>
-            <span class="text-xs font-medium text-gray-400">Connecting...</span>
+        <div class="flex items-center gap-3">
+          <!-- Theme Toggle Button -->
+          <button onclick="toggleTheme()" id="theme-toggle"
+            class="p-2 rounded-lg bg-card-bg border border-primary/30 hover:bg-card-hover transition-all duration-300"
+            title="Toggle Theme">
+            <i data-lucide="sun" class="w-5 h-5 text-primary"></i>
+          </button>
+
+          <!-- Connection Status -->
+          <div class="flex items-center justify-center">
+            <div class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-card-bg border border-primary/30"
+              id="connection-status">
+              <span class="pulse-dot w-2 h-2 bg-gray-400 rounded-full"></span>
+              <span class="text-xs font-medium text-gray-400">Connecting...</span>
+            </div>
           </div>
         </div>
       </div>
@@ -81,11 +90,11 @@
           <div class="flex items-center space-x-2 sm:space-x-3">
             <div
               class="p-1.5 sm:p-2 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-lg shrink-0 border border-blue-400/30">
-              <i data-lucide="thermometer" class="w-5 h-5 sm:w-6 sm:h-6 text-blue-400"></i>
+              <i data-lucide="thermometer" class="w-5 h-5 sm:w-6 sm:h-6 text-blue-500"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-[10px] sm:text-xs font-medium text-blue-300/70 truncate">Suhu</p>
-              <p id="current-temp" class="text-lg sm:text-xl font-bold text-blue-400 truncate stat-glow">--</p>
+              <p class="text-[10px] sm:text-xs font-medium text-subtext truncate">Suhu</p>
+              <p id="current-temp" class="text-lg sm:text-xl font-bold text-blue-600 truncate stat-glow">--</p>
             </div>
           </div>
         </div>
@@ -95,11 +104,11 @@
           <div class="flex items-center space-x-2 sm:space-x-3">
             <div
               class="p-1.5 sm:p-2 bg-gradient-to-br from-amber-500/20 to-amber-600/20 rounded-lg shrink-0 border border-amber-400/30">
-              <i data-lucide="droplets" class="w-5 h-5 sm:w-6 sm:h-6 text-amber-400"></i>
+              <i data-lucide="droplets" class="w-5 h-5 sm:w-6 sm:h-6 text-amber-500"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-[10px] sm:text-xs font-medium text-amber-300/70 truncate">Kekeruhan</p>
-              <p id="current-turb" class="text-lg sm:text-xl font-bold text-amber-400 truncate stat-glow">--</p>
+              <p class="text-[10px] sm:text-xs font-medium text-subtext truncate">Kekeruhan</p>
+              <p id="current-turb" class="text-lg sm:text-xl font-bold text-amber-600 truncate stat-glow">--</p>
             </div>
           </div>
         </div>
@@ -109,11 +118,11 @@
           <div class="flex items-center space-x-2 sm:space-x-3">
             <div
               class="p-1.5 sm:p-2 bg-gradient-to-br from-green-500/20 to-green-600/20 rounded-lg shrink-0 border border-green-400/30">
-              <i data-lucide="activity" class="w-5 h-5 sm:w-6 sm:h-6 text-green-400"></i>
+              <i data-lucide="activity" class="w-5 h-5 sm:w-6 sm:h-6 text-green-500"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-[10px] sm:text-xs font-medium text-green-300/70 truncate">Mode</p>
-              <p id="current-mode" class="text-base sm:text-lg font-bold text-green-400 truncate">--</p>
+              <p class="text-[10px] sm:text-xs font-medium text-subtext truncate">Mode</p>
+              <p id="current-mode" class="text-base sm:text-lg font-bold text-green-600 truncate">--</p>
             </div>
           </div>
         </div>
@@ -123,11 +132,11 @@
           <div class="flex items-center space-x-2 sm:space-x-3">
             <div
               class="p-1.5 sm:p-2 bg-gradient-to-br from-red-500/20 to-red-600/20 rounded-lg shrink-0 border border-red-400/30">
-              <i data-lucide="zap" class="w-5 h-5 sm:w-6 sm:h-6 text-red-400"></i>
+              <i data-lucide="zap" class="w-5 h-5 sm:w-6 sm:h-6 text-red-500"></i>
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-[10px] sm:text-xs font-medium text-red-300/70 truncate">Heater</p>
-              <p id="current-pwm-heater" class="text-lg sm:text-xl font-bold text-red-400 truncate stat-glow">--</p>
+              <p class="text-[10px] sm:text-xs font-medium text-subtext truncate">Heater</p>
+              <p id="current-pwm-heater" class="text-lg sm:text-xl font-bold text-red-600 truncate stat-glow">--</p>
             </div>
           </div>
         </div>
@@ -137,11 +146,11 @@
           <div class="flex items-center space-x-2 sm:space-x-3 justify-center md:justify-start">
             <div
               class="p-1.5 sm:p-2 bg-gradient-to-br from-purple-500/20 to-purple-600/20 rounded-lg shrink-0 border border-purple-400/30">
-              <i data-lucide="tornado" class="w-5 h-5 sm:w-6 sm:h-6 text-purple-400"></i>
+              <i data-lucide="tornado" class="w-5 h-5 sm:w-6 sm:h-6 text-purple-500"></i>
             </div>
             <div class="flex-1 min-w-0 flex md:block items-center gap-2">
-              <p class="text-[10px] sm:text-xs font-medium text-purple-300/70">Pompa</p>
-              <p id="current-pwm-pump" class="text-lg sm:text-xl font-bold text-purple-400 stat-glow">--</p>
+              <p class="text-[10px] sm:text-xs font-medium text-subtext">Pompa</p>
+              <p id="current-pwm-pump" class="text-lg sm:text-xl font-bold text-purple-600 stat-glow">--</p>
             </div>
           </div>
         </div>
@@ -150,13 +159,12 @@
       <!-- Chart Mode Selector -->
       <div class="glass-card p-4 mb-4 flex flex-col lg:flex-row justify-between items-center gap-4">
         <div class="flex items-center gap-2">
-          <i data-lucide="history" class="w-5 h-5 text-cyan-400"></i>
-          <span class="font-bold text-cyan-100 text-sm sm:text-base">Mode Grafik:</span>
+          <i data-lucide="history" class="w-5 h-5 text-primary"></i>
+          <span class="font-bold text-heading text-sm sm:text-base">Mode Grafik:</span>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 justify-center lg:justify-end w-full">
-          <select id="chartTimeRange" onchange="handleTimeRangeChange()"
-            class="p-2 border border-cyan-500/30 rounded-lg text-sm bg-slate-800/50 text-cyan-100 font-medium focus:ring-2 focus:ring-cyan-500 outline-none">
+          <select id="chartTimeRange" onchange="handleTimeRangeChange()" class="input-field p-2 text-sm font-medium">
             <option value="live">🔴 Live Stream</option>
             <option value="1">⏱️ 1 Jam Terakhir</option>
             <option value="6">⏱️ 6 Jam Terakhir</option>
@@ -164,14 +172,12 @@
           </select>
 
           <div id="customDateInputs" class="hidden flex flex-wrap items-center gap-2">
-            <input type="datetime-local" id="chartStartDate"
-              class="p-1.5 border border-cyan-500/30 rounded text-sm text-cyan-100 bg-slate-800/50">
-            <span class="text-cyan-400">-</span>
-            <input type="datetime-local" id="chartEndDate"
-              class="p-1.5 border border-cyan-500/30 rounded text-sm text-cyan-100 bg-slate-800/50">
+            <input type="datetime-local" id="chartStartDate" class="input-field p-1.5 text-sm">
+            <span class="text-primary">-</span>
+            <input type="datetime-local" id="chartEndDate" class="input-field p-1.5 text-sm">
 
             <button onclick="loadCustomHistory()"
-              class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white px-3 py-1.5 rounded text-sm font-bold transition shadow-lg flex items-center gap-1">
+              class="btn-primary px-3 py-1.5 text-sm font-bold flex items-center gap-1">
               <i data-lucide="search" class="w-3 h-3"></i> Load
             </button>
           </div>
@@ -183,12 +189,11 @@
         <!-- Temperature Chart -->
         <div class="glass-card p-4 sm:p-6">
           <div class="flex justify-between items-center mb-4">
-            <h3 class="text-base sm:text-lg font-bold flex items-center text-cyan-100">
-              <i data-lucide="line-chart" class="w-5 h-5 mr-2 text-blue-400"></i>
+            <h3 class="text-base sm:text-lg font-bold flex items-center text-heading">
+              <i data-lucide="line-chart" class="w-5 h-5 mr-2 text-blue-500"></i>
               Grafik Suhu
             </h3>
-            <button onclick="resetZoomChart('temp')"
-              class="text-xs bg-slate-700/50 hover:bg-slate-600/50 text-cyan-300 px-2 py-1 rounded border border-cyan-500/30 transition">
+            <button onclick="resetZoomChart('temp')" class="text-xs btn-secondary px-2 py-1">
               Reset Zoom
             </button>
           </div>
@@ -200,12 +205,11 @@
         <!-- Turbidity Chart -->
         <div class="glass-card p-4 sm:p-6">
           <div class="flex justify-between items-center mb-4">
-            <h3 class="text-base sm:text-lg font-bold flex items-center text-cyan-100">
-              <i data-lucide="bar-chart-2" class="w-5 h-5 mr-2 text-amber-400"></i>
+            <h3 class="text-base sm:text-lg font-bold flex items-center text-heading">
+              <i data-lucide="bar-chart-2" class="w-5 h-5 mr-2 text-amber-500"></i>
               Grafik Kekeruhan
             </h3>
-            <button onclick="resetZoomChart('turb')"
-              class="text-xs bg-slate-700/50 hover:bg-slate-600/50 text-cyan-300 px-2 py-1 rounded border border-cyan-500/30 transition">
+            <button onclick="resetZoomChart('turb')" class="text-xs btn-secondary px-2 py-1">
               Reset Zoom
             </button>
           </div>
@@ -217,28 +221,25 @@
 
       <!-- Control & Export -->
       <fieldset id="control-settings-fieldset" class="glass-card p-4 sm:p-6">
-        <h3 class="text-base sm:text-lg font-bold mb-4 flex items-center text-cyan-100">
-          <i data-lucide="settings" class="w-5 h-5 mr-2 text-cyan-400"></i>
+        <h3 class="text-base sm:text-lg font-bold mb-4 flex items-center text-heading">
+          <i data-lucide="settings" class="w-5 h-5 mr-2 text-primary"></i>
           Control & Export
         </h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
           <div class="col-span-1">
-            <label class="block text-sm font-medium mb-1.5 text-cyan-200">Mode Kontrol</label>
-            <select id="control-mode"
-              class="w-full p-2.5 border border-cyan-500/30 rounded-lg focus:ring-2 focus:ring-cyan-500">
+            <label class="block text-sm font-medium mb-1.5 text-subheading">Mode Kontrol</label>
+            <select id="control-mode" class="input-field w-full p-2.5">
               <option value="Fuzzy">Fuzzy Logic</option>
               <option value="PID">PID Controller</option>
             </select>
           </div>
           <div class="col-span-1">
-            <label class="block text-sm font-medium mb-1.5 text-cyan-200">Setpoint Suhu (°C)</label>
-            <input type="number" step="0.1" id="control-temp-sp"
-              class="w-full p-2.5 border border-cyan-500/30 rounded-lg focus:ring-2 focus:ring-cyan-500">
+            <label class="block text-sm font-medium mb-1.5 text-subheading">Setpoint Suhu (°C)</label>
+            <input type="number" step="0.1" id="control-temp-sp" class="input-field w-full p-2.5">
           </div>
           <div class="col-span-1">
-            <label class="block text-sm font-medium mb-1.5 text-cyan-200">Setpoint Kekeruhan (%)</label>
-            <input type="number" step="0.1" id="control-turb-sp"
-              class="w-full p-2.5 border border-cyan-500/30 rounded-lg focus:ring-2 focus:ring-cyan-500">
+            <label class="block text-sm font-medium mb-1.5 text-subheading">Setpoint Kekeruhan (%)</label>
+            <input type="number" step="0.1" id="control-turb-sp" class="input-field w-full p-2.5">
           </div>
           <div class="col-span-1 sm:col-span-1">
             <button onclick="updateControl()"
@@ -249,79 +250,76 @@
           </div>
           <div class="col-span-1 sm:col-span-2 md:col-span-1">
             <button onclick="openExportModal()"
-              class="btn-primary !bg-gradient-to-r !from-green-500 !to-emerald-600 hover:!from-green-400 hover:!to-emerald-500 w-full flex items-center justify-center space-x-2 py-2.5">
+              class="btn-success w-full flex items-center justify-center space-x-2 py-2.5">
               <i data-lucide="download" class="w-4 h-4"></i>
               <span>CSV</span>
             </button>
           </div>
         </div>
 
-        <div id="pid-params-control" class="mt-6 hidden border-t border-cyan-500/20 pt-4">
-          <h4 class="font-semibold mb-3 text-cyan-200 text-sm">Parameter PID</h4>
+        <div id="pid-params-control" class="mt-6 hidden border-t border-primary/20 pt-4">
+          <h4 class="font-semibold mb-3 text-subheading text-sm">Parameter PID</h4>
           <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
-            <div><label class="block text-[10px] font-medium mb-1 text-cyan-300">Kp Suhu</label><input type="number"
-                step="0.1" id="control-kp-temp" class="w-full p-2 border border-cyan-500/30 rounded text-sm"></div>
-            <div><label class="block text-[10px] font-medium mb-1 text-cyan-300">Ki Suhu</label><input type="number"
-                step="0.1" id="control-ki-temp" class="w-full p-2 border border-cyan-500/30 rounded text-sm"></div>
-            <div><label class="block text-[10px] font-medium mb-1 text-cyan-300">Kd Suhu</label><input type="number"
-                step="0.1" id="control-kd-temp" class="w-full p-2 border border-cyan-500/30 rounded text-sm"></div>
-            <div><label class="block text-[10px] font-medium mb-1 text-cyan-300">Kp Keruh</label><input type="number"
-                step="0.1" id="control-kp-turb" class="w-full p-2 border border-cyan-500/30 rounded text-sm"></div>
-            <div><label class="block text-[10px] font-medium mb-1 text-cyan-300">Ki Keruh</label><input type="number"
-                step="0.1" id="control-ki-turb" class="w-full p-2 border border-cyan-500/30 rounded text-sm"></div>
-            <div><label class="block text-[10px] font-medium mb-1 text-cyan-300">Kd Keruh</label><input type="number"
-                step="0.1" id="control-kd-turb" class="w-full p-2 border border-cyan-500/30 rounded text-sm"></div>
+            <div><label class="block text-[10px] font-medium mb-1 text-subtext">Kp Suhu</label><input type="number"
+                step="0.1" id="control-kp-temp" class="input-field w-full p-2 text-sm"></div>
+            <div><label class="block text-[10px] font-medium mb-1 text-subtext">Ki Suhu</label><input type="number"
+                step="0.1" id="control-ki-temp" class="input-field w-full p-2 text-sm"></div>
+            <div><label class="block text-[10px] font-medium mb-1 text-subtext">Kd Suhu</label><input type="number"
+                step="0.1" id="control-kd-temp" class="input-field w-full p-2 text-sm"></div>
+            <div><label class="block text-[10px] font-medium mb-1 text-subtext">Kp Keruh</label><input type="number"
+                step="0.1" id="control-kp-turb" class="input-field w-full p-2 text-sm"></div>
+            <div><label class="block text-[10px] font-medium mb-1 text-subtext">Ki Keruh</label><input type="number"
+                step="0.1" id="control-ki-turb" class="input-field w-full p-2 text-sm"></div>
+            <div><label class="block text-[10px] font-medium mb-1 text-subtext">Kd Keruh</label><input type="number"
+                step="0.1" id="control-kd-turb" class="input-field w-full p-2 text-sm"></div>
           </div>
         </div>
       </fieldset>
 
       <!-- Sensor Calibration -->
       <fieldset id="sensor-calibration-fieldset" class="glass-card p-4 sm:p-6">
-        <h3 class="text-base sm:text-lg font-bold mb-4 flex items-center text-cyan-100">
-          <i data-lucide="sliders" class="w-5 h-5 mr-2 text-amber-400"></i>
+        <h3 class="text-base sm:text-lg font-bold mb-4 flex items-center text-heading">
+          <i data-lucide="sliders" class="w-5 h-5 mr-2 text-amber-500"></i>
           Kalibrasi Sensor Kekeruhan
         </h3>
         <div class="flex flex-col lg:flex-row gap-6">
 
           <div class="w-full lg:w-1/3">
-            <div
-              class="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-2 border-blue-400/30 rounded-xl p-4 text-center h-full flex flex-col justify-center shadow-lg">
+            <div class="live-adc-display rounded-xl p-4 text-center h-full flex flex-col justify-center shadow-lg">
               <div class="flex items-center justify-center space-x-2 mb-2">
-                <i data-lucide="activity" class="w-5 h-5 text-blue-400"></i>
-                <p class="text-xs font-medium text-blue-300">Live ADC</p>
+                <i data-lucide="activity" class="w-5 h-5 text-blue-500"></i>
+                <p class="text-xs font-medium text-blue-600">Live ADC</p>
               </div>
-              <p id="live-adc-value" class="text-3xl sm:text-4xl font-bold text-blue-400 my-2 stat-glow">----</p>
-              <p class="text-[10px] text-blue-300/70">Data Realtime</p>
+              <p id="live-adc-value" class="text-3xl sm:text-4xl font-bold text-blue-600 my-2 stat-glow">----</p>
+              <p class="text-[10px] text-subtext">Data Realtime</p>
             </div>
           </div>
 
           <div class="w-full lg:w-2/3 space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label class="block text-xs sm:text-sm font-semibold mb-2 text-cyan-200">ADC Air Jernih</label>
-                <input type="number" id="calib-adc-jernih"
-                  class="w-full p-3 border-2 border-cyan-500/30 rounded-lg text-lg font-semibold focus:border-blue-500 focus:ring-0 text-cyan-100">
+                <label class="block text-xs sm:text-sm font-semibold mb-2 text-subheading">ADC Air Jernih</label>
+                <input type="number" id="calib-adc-jernih" class="input-field w-full p-3 text-lg font-semibold">
               </div>
               <div>
-                <label class="block text-xs sm:text-sm font-semibold mb-2 text-cyan-200">ADC Air Keruh</label>
-                <input type="number" id="calib-adc-keruh"
-                  class="w-full p-3 border-2 border-cyan-500/30 rounded-lg text-lg font-semibold focus:border-amber-500 focus:ring-0 text-cyan-100">
+                <label class="block text-xs sm:text-sm font-semibold mb-2 text-subheading">ADC Air Keruh</label>
+                <input type="number" id="calib-adc-keruh" class="input-field w-full p-3 text-lg font-semibold">
               </div>
             </div>
 
             <div class="flex flex-col sm:flex-row justify-end gap-3 pt-2">
               <button onclick="resetCalibration()"
-                class="bg-slate-700/50 hover:bg-slate-600/50 text-cyan-200 px-5 py-3 rounded-lg font-semibold w-full sm:w-auto text-center border border-cyan-500/30 transition">
+                class="btn-secondary px-5 py-3 font-semibold w-full sm:w-auto text-center">
                 Reset Default
               </button>
               <button onclick="uploadCalibration()"
-                class="btn-primary !bg-gradient-to-r !from-amber-500 !to-orange-600 hover:!from-amber-400 hover:!to-orange-500 px-6 py-3 w-full sm:w-auto flex justify-center items-center space-x-2">
+                class="btn-warning px-6 py-3 w-full sm:w-auto flex justify-center items-center space-x-2">
                 <i data-lucide="upload" class="w-4 h-4"></i>
                 <span>Upload</span>
               </button>
             </div>
 
-            <div class="text-xs text-cyan-400/70 flex flex-col sm:flex-row justify-between items-center mt-2 gap-1">
+            <div class="text-xs text-subtext flex flex-col sm:flex-row justify-between items-center mt-2 gap-1">
               <span id="calib-status" class="text-center sm:text-left">Menunggu input...</span>
               <span id="calib-last-update" class="text-center sm:text-right">Belum dikalibrasi</span>
             </div>
@@ -336,28 +334,26 @@
     class="modal-overlay fixed inset-0 flex items-center justify-center z-[100] p-4 hidden transition-opacity">
     <div class="glass-card p-5 sm:p-6 w-[95%] max-w-lg shadow-2xl transform transition-all scale-100">
       <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg sm:text-xl font-bold text-cyan-100">Export Data</h3>
-        <button onclick="closeExportModal()" class="text-cyan-400 hover:text-cyan-300 transition">
+        <h3 class="text-lg sm:text-xl font-bold text-heading">Export Data</h3>
+        <button onclick="closeExportModal()" class="text-primary hover:opacity-70 transition">
           <i data-lucide="x" class="w-6 h-6"></i>
         </button>
       </div>
 
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-medium mb-2 text-cyan-200">Waktu Mulai</label>
-          <input type="datetime-local" id="export-start-time"
-            class="w-full p-3 border border-cyan-500/30 rounded-lg focus:ring-2 focus:ring-cyan-500">
+          <label class="block text-sm font-medium mb-2 text-subheading">Waktu Mulai</label>
+          <input type="datetime-local" id="export-start-time" class="input-field w-full p-3">
         </div>
         <div>
-          <label class="block text-sm font-medium mb-2 text-cyan-200">Waktu Selesai</label>
-          <input type="datetime-local" id="export-end-time"
-            class="w-full p-3 border border-cyan-500/30 rounded-lg focus:ring-2 focus:ring-cyan-500">
+          <label class="block text-sm font-medium mb-2 text-subheading">Waktu Selesai</label>
+          <input type="datetime-local" id="export-end-time" class="input-field w-full p-3">
         </div>
       </div>
 
       <div class="flex flex-col sm:flex-row justify-end gap-3 mt-6">
         <button onclick="closeExportModal()"
-          class="bg-slate-700/50 hover:bg-slate-600/50 text-cyan-200 font-medium px-4 py-3 rounded-lg w-full sm:w-auto order-2 sm:order-1 border border-cyan-500/30 transition">
+          class="btn-secondary font-medium px-4 py-3 w-full sm:w-auto order-2 sm:order-1">
           Batal
         </button>
         <button onclick="downloadRangedCSV()"
@@ -373,7 +369,7 @@
   <div class="container mx-auto max-w-7xl px-4 mb-6 content-layer">
     <div class="flex justify-end mb-2">
       <button onclick="toggleDebugConsole()"
-        class="text-xs font-mono bg-slate-800/70 text-cyan-300 px-3 py-1.5 rounded hover:bg-slate-700/70 transition-colors flex items-center gap-2 border border-cyan-500/30 shadow-lg">
+        class="text-xs font-mono btn-secondary px-3 py-1.5 flex items-center gap-2">
         <i data-lucide="terminal" class="w-3 h-3"></i>
         <span>Toggle Live Debug</span>
       </button>
@@ -381,33 +377,32 @@
 
     <div id="debug-console-wrapper" class="hidden transition-all duration-300">
       <div class="glass-card overflow-hidden font-mono text-xs sm:text-sm">
-        <div class="bg-slate-800/50 px-4 py-2 border-b border-cyan-500/20 flex justify-between items-center">
+        <div class="debug-header px-4 py-2 border-b border-primary/20 flex justify-between items-center">
           <div class="flex items-center gap-2">
             <div class="w-3 h-3 rounded-full bg-red-500"></div>
             <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
             <div class="w-3 h-3 rounded-full bg-green-500"></div>
-            <span class="text-cyan-400 font-bold ml-2">MQTT LIVE STREAM</span>
+            <span class="text-primary font-bold ml-2">MQTT LIVE STREAM</span>
           </div>
-          <button onclick="clearDebugConsole()" class="text-cyan-500 hover:text-cyan-300 transition" title="Clear Log">
+          <button onclick="clearDebugConsole()" class="text-primary hover:opacity-70 transition" title="Clear Log">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
         </div>
 
-        <div id="debug-log-container"
-          class="h-64 overflow-y-auto p-4 space-y-1 text-gray-300 custom-scrollbar bg-slate-900/50">
-          <div class="opacity-50 italic text-cyan-500/50">> System ready. Waiting for data stream...</div>
+        <div id="debug-log-container" class="debug-log h-64 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+          <div class="opacity-50 italic text-subtext">> System ready. Waiting for data stream...</div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Footer -->
-  <footer class="glass-card content-layer" style="border-radius: 0; margin-top: 2rem;">
+  <footer class="glass-card content-layer" style="border-radius: 0; margin-top: 1rem; margin-bottom: 0;">
     <div class="container mx-auto max-w-7xl px-4 h-10 flex items-center justify-between">
 
       <div class="flex items-center space-x-2">
-        <i data-lucide="flask-conical" class="w-3.5 h-3.5 text-cyan-400"></i>
-        <p class="text-[11px] text-cyan-300/70 font-medium leading-none pt-0.5">
+        <i data-lucide="flask-conical" class="w-3.5 h-3.5 text-primary"></i>
+        <p class="text-[11px] text-subtext font-medium leading-none pt-0.5">
           &copy; <span id="footer-year"></span> Aquarium Lab.
         </p>
       </div>
@@ -418,12 +413,12 @@
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
             <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
           </span>
-          <span class="text-[10px] font-bold text-cyan-400/70 uppercase tracking-wider leading-none pt-0.5">System
+          <span class="text-[10px] font-bold text-subtext uppercase tracking-wider leading-none pt-0.5">System
             Active</span>
         </div>
 
-        <div class="h-4 w-px bg-cyan-500/30"></div>
-        <span class="text-[10px] text-cyan-400/50 leading-none pt-0.5">v1.0</span>
+        <div class="h-4 w-px bg-primary/30"></div>
+        <span class="text-[10px] text-subtext leading-none pt-0.5">v1.0</span>
       </div>
 
     </div>
