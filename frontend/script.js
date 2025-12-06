@@ -670,7 +670,7 @@ async function uploadCalibration() {
 }
 
 function resetCalibration() {
-  document.getElementById('calib-adc-jernih').value = 9475;
+  document.getElementById('calib-adc-jernih').value = 21000;
   document.getElementById('calib-adc-keruh').value = 3550;
 }
 
